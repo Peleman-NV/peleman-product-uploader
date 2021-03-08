@@ -83,23 +83,12 @@ class Plugin
 	{
 		$plugin_admin = new PpuAdmin($this->get_plugin_name(), $this->get_version());
 
-		//$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_styles');
-		//$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts', 5);
-	}
+		$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_styles');
+		$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts', 5);
 
-	/**
-	 * Register all of the hooks related to the public-facing functionality
-	 * of the plugin.
-	 *
-	 * @since    1.0.0
-	 * @access   private
-	 */
-	private function define_public_hooks()
-	{
-		$product_page = new PpuProductPage($this->get_plugin_name(), $this->get_version());
-
-		//$this->loader->add_action('wp_enqueue_scripts', $product_page, 'enqueue_styles');
-		//$this->loader->add_action('wp_enqueue_scripts', $product_page, 'enqueue_scripts');
+		$this->loader->add_action('admin_menu', $plugin_admin, 'ppu_add_admin_menu');
+		$this->loader->add_action('admin_post_upload_products_json', $plugin_admin, 'uploadProductsJson');
+		$this->loader->add_action('admin_post_nopriv_upload_products_json', $plugin_admin, 'uploadProductsJson');
 	}
 
 	/**

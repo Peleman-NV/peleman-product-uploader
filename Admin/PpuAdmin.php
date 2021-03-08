@@ -2,6 +2,9 @@
 
 namespace PelemanProductUploader\Admin;
 
+use Automattic\WooCommerce\Client;
+
+
 /**
  * The admin-specific functionality of the plugin.
  * 
@@ -72,7 +75,7 @@ class PpuAdmin
 	 */
 	public function ppu_add_admin_menu()
 	{
-		add_menu_page('Peleman Printshop Integrator', 'Peleman', 'manage_options', 'ppu-menu.php', array($this, 'require_admin_page'),  'dashicons-format-gallery');
+		add_menu_page('Peleman Product Uploader', 'Peleman Products Uploader', 'manage_options', 'ppu-menu.php', array($this, 'require_admin_page'),  'dashicons-welcome-write-blog');
 	}
 
 	/**
@@ -81,14 +84,5 @@ class PpuAdmin
 	public function require_admin_page()
 	{
 		require_once 'partials/ppu-menu.php';
-	}
-
-	/**
-	 * Register plugin settings
-	 */
-	function ppu_register_plugin_settings()
-	{
-		// register_setting('ppu_custom_settings', 'ppi-imaxel-private-key');
-		// register_setting('ppu_custom_settings', 'ppi-imaxel-public-key');
 	}
 }
