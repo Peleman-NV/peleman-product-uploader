@@ -14,7 +14,7 @@ require_once plugin_dir_path(__FILE__) . '/Includes/PpuDeactivator.php';
  * @wordpress-plugin
  * Plugin Name:       Peleman product uploader
  * Plugin URI:        https://www.peleman.com
- * Description:       This plugin enables easy uploading of Peleman products
+ * Description:       Plugin to enable easy uploading of Peleman products
  * Version:           1.0.0
  * Author:            Jason Goossens
  * Text Domain:       peleman-product-uploader
@@ -35,7 +35,7 @@ if (!in_array('woocommerce/woocommerce.php', $active_plugins)) {
 }
 
 // Constants definition
-define('PELEMAN_PRINTPARTNER_INTEGRATOR_VERSION', '1.0.0');
+define('PELEMAN_PRODUCT_UPLOADER_VERSION', '1.0.0');
 /**
  * The code that runs during plugin activation.
  */
