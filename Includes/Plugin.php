@@ -87,6 +87,7 @@ class Plugin
 		$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts', 5);
 
 		$this->loader->add_action('admin_menu', $plugin_admin, 'ppu_add_admin_menu');
+		$this->loader->add_action('admin_init', $plugin_admin, 'ppu_register_plugin_settings');
 		$this->loader->add_action('admin_post_upload_products_json', $plugin_admin, 'uploadProductsJson');
 		$this->loader->add_action('admin_post_nopriv_upload_products_json', $plugin_admin, 'uploadProductsJson');
 	}

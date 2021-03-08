@@ -68,13 +68,41 @@ class PpuAdmin
 		require_once 'partials/ppu-menu.php';
 	}
 
+
+	/**
+	 * Register plugin settings
+	 */
+	function ppu_register_plugin_settings()
+	{
+		register_setting('ppu_custom_settings', 'ppu-wc-key');
+		register_setting('ppu_custom_settings', 'ppu-wc-secret');
+	}
+
 	/**
 	 * Process products JSON
 	 */
 	public function uploadProductsJson()
 	{
-
 		$jsonData = file_get_contents($_FILES['ppu-upload']['tmp_name']);
 		$data = json_decode($jsonData);
+
+		$siteUrl = get_site_url();
+
+		$api = new Client(
+			$siteUrl,
+			get_option('ppu-wc-key'),
+			get_option('ppu-wc-secret'),
+			[
+				'wp_api' => true,
+				'version' => 'wc/v3'
+			]
+		);
+		//http://woocommerce.github.io/woocommerce-rest-api-docs/#product-variation-properties
+		$product = $api->get('products/15');
+
+		$variations = $api->get('products/15/variations');
+
+
+		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($variations, true) . '</pre>');
 	}
 }
