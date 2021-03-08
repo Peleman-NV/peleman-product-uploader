@@ -3,5 +3,8 @@
         "psr-4": {
             "PelemanProductUploader\\": ""
         }
+    },
+    "require": {
+        "automattic/woocommerce": "^3.0"
     }
 }
