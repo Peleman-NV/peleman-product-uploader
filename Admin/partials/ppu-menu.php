@@ -1,9 +1,3 @@
-<?php
-
-
-?>
-
-
 <div class="ppu-settings">
     <h1>Peleman Product Uploader</h1>
     <hr>

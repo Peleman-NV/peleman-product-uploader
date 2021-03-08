@@ -4,24 +4,6 @@ namespace PelemanProductUploader\Admin;
 
 use Automattic\WooCommerce\Client;
 
-
-/**
- * The admin-specific functionality of the plugin.
- * 
- * @package    Peleman_Printpartner_Integrator
- * @subpackage Peleman_Printpartner_Integrator/admin
- */
-
-/**
- * The admin-specific functionality of the plugin.
- *
- * Defines the plugin name, version, and two examples hooks for how to
- * enqueue the admin-specific stylesheet and JavaScript.
- *
- * @package    Peleman_Printpartner_Integrator
- * @subpackage Peleman_Printpartner_Integrator/admin
- * @author     Noë Baeten, Jason Goossens, Chris Schippers <None>
- */
 class PpuAdmin
 {
 
@@ -59,7 +41,7 @@ class PpuAdmin
 	 */
 	public function enqueue_styles()
 	{
-		//wp_enqueue_style($this->plugin_name, plugin_dir_url(__FILE__) . 'css/style.css', array(), $this->version, 'all');
+		wp_enqueue_style($this->plugin_name, plugin_dir_url(__FILE__) . 'css/style.css', array(), $this->version, 'all');
 	}
 
 	/**
