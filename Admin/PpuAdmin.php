@@ -85,4 +85,14 @@ class PpuAdmin
 	{
 		require_once 'partials/ppu-menu.php';
 	}
+
+	/**
+	 * Process products JSON
+	 */
+	public function uploadProductsJson()
+	{
+
+		$jsonData = file_get_contents($_FILES['ppu-upload']['tmp_name']);
+		$data = json_decode($jsonData);
+	}
 }
