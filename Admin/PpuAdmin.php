@@ -134,14 +134,14 @@ class PpuAdmin
 			case 'attributes':
 				$endpoint = 'products/attributes';
 				foreach ($items as $item) {
-					$api->$action($endpoint, $item);
+					$api->post($endpoint, $item);
 				}
 				break;
 			case 'terms':
 				$attributeId = 1; // to be filled in
 				$endpoint = 'products/attributes/' . $attributeId . '/terms';
 				foreach ($items as $item) {
-					$api->$action($endpoint, $item);
+					$api->post($endpoint, $item);
 				}
 				break;
 		}
