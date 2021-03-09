@@ -35,9 +35,10 @@
         <button type="submit" class="button button-primary">Save changes</button>
     </form>
     <hr>
-    <h2>Manually upload products</h2>
+    <h2>Upload JSON for products, variations, attributes, or terms.</h2>
     <form action="admin-post.php" method="POST" enctype="multipart/form-data">
-        <input type="hidden" name="action" value="upload_products_json">
+        <input type="hidden" name="action" value="upload_json">
+        <?php wp_nonce_field('upload_json') ?>
         <div class="form-row">
             <div class="grid-medium-column">
                 <label for="ppu-upload">Click to select a JSON file</label>
@@ -46,11 +47,11 @@
                 <input id="ppu-upload" name="ppu-upload" type="file" accept="application/json">
             </div>
         </div>
-        <button type="submit" class="button button-primary">Upload products</button>
+        <button type="submit" class="button button-primary">Upload JSON</button>
     </form>
     <hr>
-    <h2>Show orders</h2>
-    <form action="admin-post.php" method="POST" enctype="multipart/form-data">
+    <h2>Show orders (temp dev function)</h2>
+    <form action="admin-post.php" method="POST">
         <input type="hidden" name="action" value="show_orders">
         <div class="form-row">
             <div class="grid-medium-column">

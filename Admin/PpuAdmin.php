@@ -81,13 +81,14 @@ class PpuAdmin
 	/**
 	 * Process products JSON
 	 */
-	public function uploadProductsJson()
+	public function uploadJson()
 	{
+		check_admin_referer('upload_json');
+
 		$jsonData = file_get_contents($_FILES['ppu-upload']['tmp_name']);
 		$data = json_decode($jsonData);
 
 		$siteUrl = get_site_url();
-
 		$api = new Client(
 			$siteUrl,
 			get_option('ppu-wc-key'),
@@ -97,13 +98,55 @@ class PpuAdmin
 				'version' => 'wc/v3'
 			]
 		);
-		//http://woocommerce.github.io/woocommerce-rest-api-docs/#product-variation-properties
-		$product = $api->get('products/15');
 
-		$variations = $api->get('products/15/variations');
+		$items = $data->items;
 
+		switch ($data->type) {
+			case 'products':
+				$endpoint = 'products/';
+				foreach ($items as $item) {
+					// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
+					$productId = wc_get_product_id_by_sku($item->sku);
 
-		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($variations, true) . '</pre>');
+					foreach ($item->categories as $category) { // match category slug to id
+						if (!is_int($category->id)) {
+							$category->id = get_term_by('slug', $category->id, 'product_cat')->term_id;
+						}
+					}
+
+					// match images
+
+					if ($productId != null) {
+						$api->put($endpoint . $productId, $item);
+					} else {
+						$api->post($endpoint, $item);
+					}
+				}
+				break;
+			case 'variations':
+				$productId = 1; // to be filled in
+				$endpoint = 'products/' . $productId . '/variations';
+				foreach ($items as $item) {
+
+					//$api->$action($endpoint, $item);
+				}
+				break;
+			case 'attributes':
+				$endpoint = 'products/attributes';
+				foreach ($items as $item) {
+					$api->$action($endpoint, $item);
+				}
+				break;
+			case 'terms':
+				$attributeId = 1; // to be filled in
+				$endpoint = 'products/attributes/' . $attributeId . '/terms';
+				foreach ($items as $item) {
+					$api->$action($endpoint, $item);
+				}
+				break;
+		}
+
+		wp_safe_redirect($_POST['_wp_http_referer']);
 	}
 
 	/**
