@@ -105,4 +105,31 @@ class PpuAdmin
 
 		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($variations, true) . '</pre>');
 	}
+
+	/**
+	 * Show one or all orders
+	 */
+	public function showOrders()
+	{
+		if (isset($_POST['order_id']) && $_POST['order_id'] != '') {
+			$endPoint = 'orders/' . esc_attr($_POST['order_id']);
+		} else {
+			$endPoint = 'orders';
+		}
+
+		$siteUrl = get_site_url();
+
+		$api = new Client(
+			$siteUrl,
+			get_option('ppu-wc-key'),
+			get_option('ppu-wc-secret'),
+			[
+				'wp_api' => true,
+				'version' => 'wc/v3'
+			]
+		);
+		$result = $api->get($endPoint);
+
+		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
+	}
 }

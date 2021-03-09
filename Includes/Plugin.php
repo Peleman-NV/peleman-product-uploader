@@ -90,6 +90,8 @@ class Plugin
 		$this->loader->add_action('admin_init', $plugin_admin, 'ppu_register_plugin_settings');
 		$this->loader->add_action('admin_post_upload_products_json', $plugin_admin, 'uploadProductsJson');
 		$this->loader->add_action('admin_post_nopriv_upload_products_json', $plugin_admin, 'uploadProductsJson');
+
+		$this->loader->add_action('admin_post_show_orders', $plugin_admin, 'showOrders');
 	}
 
 	/**

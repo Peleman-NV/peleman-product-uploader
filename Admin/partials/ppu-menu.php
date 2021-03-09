@@ -48,4 +48,18 @@
         </div>
         <button type="submit" class="button button-primary">Upload products</button>
     </form>
+    <hr>
+    <h2>Show orders</h2>
+    <form action="admin-post.php" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="show_orders">
+        <div class="form-row">
+            <div class="grid-medium-column">
+                <label for="order_id">Order ID</label>
+            </div>
+            <div class="grid-large-column">
+                <input type="text" id="order_id" name="order_id" placeholder="Leave empty for all orders">
+            </div>
+        </div>
+        <button type="submit" class="button button-primary">Show it</button>
+    </form>
 </div>
