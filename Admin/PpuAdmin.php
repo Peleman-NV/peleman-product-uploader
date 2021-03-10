@@ -105,12 +105,20 @@ class PpuAdmin
 			case 'products':
 				$endpoint = 'products/';
 				foreach ($items as $item) {
+
 					// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
 					$productId = wc_get_product_id_by_sku($item->sku);
 
 					foreach ($item->categories as $category) { // match category slug to id
 						if (!is_int($category->id)) {
-							$category->id = get_term_by('slug', $category->id, 'product_cat')->term_id;
+							$category->id = get_term_by('slug', $category->id, 'product_cat')->term_id ?? 'uncategorized';
+						}
+					}
+
+					foreach ($item->tags as $tag) { // match category slug to id
+						if (!is_int($tag->id)) {
+							$tag->id = get_term_by('slug', $tag->id, 'product_tag')->term_id ?? 'uncategorized';
+							echo $tag->id;
 						}
 					}
 
@@ -122,6 +130,30 @@ class PpuAdmin
 						$api->post($endpoint, $item);
 					}
 				}
+				break;
+			case 'categories':
+				$endpoint = 'products/categories/';
+				foreach ($items as $item) {
+
+					$categoryId = get_term_by('slug', $item->slug, 'product_cat')->term_id;
+					if (isset($item->image->name)) {
+						echo $item->image->name;
+
+						// get it by query - won't happen that much anyway...
+
+
+						var_dump(get_term_by('slug', $item->image->name));
+						//$item->image->src = wp_get_attachment_url($item->image->id);
+					}
+
+					// if ($categoryId != null) {
+					// 	$response = $api->put($endpoint . $categoryId, $item);
+					// } else {
+					// 	$response = $api->post($endpoint, $item);
+					// }
+
+				}
+				die();
 				break;
 			case 'variations':
 				$productId = 1; // to be filled in
@@ -158,6 +190,30 @@ class PpuAdmin
 			$endPoint = 'orders/' . esc_attr($_POST['order_id']);
 		} else {
 			$endPoint = 'orders';
+		}
+
+		$siteUrl = get_site_url();
+
+		$api = new Client(
+			$siteUrl,
+			get_option('ppu-wc-key'),
+			get_option('ppu-wc-secret'),
+			[
+				'wp_api' => true,
+				'version' => 'wc/v3'
+			]
+		);
+		$result = $api->get($endPoint);
+
+		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
+	}
+
+	public function showProducts()
+	{
+		if (isset($_POST['product_id']) && $_POST['product_id'] != '') {
+			$endPoint = 'products/' . esc_attr($_POST['order_id']);
+		} else {
+			$endPoint = 'products';
 		}
 
 		$siteUrl = get_site_url();
