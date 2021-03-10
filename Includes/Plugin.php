@@ -92,6 +92,7 @@ class Plugin
 		$this->loader->add_action('admin_post_nopriv_upload_json', $plugin_admin, 'uploadJson');
 
 		$this->loader->add_action('admin_post_show_orders', $plugin_admin, 'showOrders');
+		$this->loader->add_action('admin_post_show_products', $plugin_admin, 'showProducts');
 	}
 
 	/**
