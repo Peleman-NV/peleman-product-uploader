@@ -63,4 +63,18 @@
         </div>
         <button type="submit" class="button button-primary">Show it</button>
     </form>
+    <hr>
+    <h2>Show product (temp dev function)</h2>
+    <form action="admin-post.php" method="POST">
+        <input type="hidden" name="action" value="show_products">
+        <div class="form-row">
+            <div class="grid-medium-column">
+                <label for="order_id">Product ID</label>
+            </div>
+            <div class="grid-large-column">
+                <input type="text" id="product_id" name="product_id" placeholder="Leave empty for all product">
+            </div>
+        </div>
+        <button type="submit" class="button button-primary">Show it</button>
+    </form>
 </div>
