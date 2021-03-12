@@ -31,7 +31,6 @@ class PpuAdmin
 	 */
 	public function __construct($plugin_name, $version)
 	{
-
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
 	}
@@ -122,7 +121,7 @@ class PpuAdmin
 						}
 					}
 
-					// match images
+					// how to match images
 
 					if ($productId != null) {
 						$api->put($endpoint . $productId, $item);
@@ -137,48 +136,140 @@ class PpuAdmin
 
 					$categoryId = get_term_by('slug', $item->slug, 'product_cat')->term_id;
 					if (isset($item->image->name)) {
-						echo $item->image->name;
-
-						// get it by query - won't happen that much anyway...
-
-
-						var_dump(get_term_by('slug', $item->image->name));
-						//$item->image->src = wp_get_attachment_url($item->image->id);
+						$imageId = $this->getImageIdByName($item->image->name);
+						$item->image->id = $imageId;
 					}
 
-					// if ($categoryId != null) {
-					// 	$response = $api->put($endpoint . $categoryId, $item);
-					// } else {
-					// 	$response = $api->post($endpoint, $item);
-					// }
-
-				}
-				die();
-				break;
-			case 'variations':
-				$productId = 1; // to be filled in
-				$endpoint = 'products/' . $productId . '/variations';
-				foreach ($items as $item) {
-
-					//$api->$action($endpoint, $item);
+					if ($categoryId != null) {
+						$api->put($endpoint . $categoryId, $item);
+					} else {
+						$api->post($endpoint, $item);
+					}
 				}
 				break;
 			case 'attributes':
-				$endpoint = 'products/attributes';
+				$endpoint = 'products/attributes/';
+
+				$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+
 				foreach ($items as $item) {
-					$api->post($endpoint, $item);
+					if (in_array('pa_' . $item->slug, $currentAttributes['slugs'])) {
+						$id = $this->getAttributeIdBySlug($item->slug, $currentAttributes['attributes']);
+						$api->put($endpoint . $id, $item);
+					} else {
+						$api->post($endpoint, $item);
+					}
 				}
 				break;
 			case 'terms':
-				$attributeId = 1; // to be filled in
-				$endpoint = 'products/attributes/' . $attributeId . '/terms';
-				foreach ($items as $item) {
-					$api->post($endpoint, $item);
+				$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
+
+				$currentAttributesWithTermsArray = array();
+				foreach ($currentAttributes['attributes'] as $attributes) {
+					$termsEndpoint = 'products/attributes/' . $attributes->id . '/terms';
+					$attributeTerms = $api->get($termsEndpoint);
+
+					if (empty($attributeTerms)) {
+						array_push($currentAttributesWithTermsArray, array(
+							'attributeId' => $attributes->id,
+							'attributeSlug' => str_replace('pa_', '', $attributes->slug),
+						));
+					} else {
+						foreach ($attributeTerms as $term) {
+							array_push($currentAttributesWithTermsArray, array(
+								'attributeId' => $attributes->id,
+								'attributeSlug' => str_replace('pa_', '', $attributes->slug),
+								'termId' => $term->id,
+								'termSlug' => $term->slug
+							));
+						}
+					}
 				}
+
+				foreach ($items as $item) {
+					if (in_array($item->slug, array_column($currentAttributesWithTermsArray, 'termSlug'))) {
+						$foundArrayKey = array_search($item->slug, array_column($currentAttributesWithTermsArray, 'termSlug'));
+						$attributeId = $currentAttributesWithTermsArray[$foundArrayKey]['attributeId'];
+						$termId = $currentAttributesWithTermsArray[$foundArrayKey]['termId'];
+						$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $termId;
+						try {
+							$api->put($endpoint, $item);
+						} catch (\Throwable $th) {
+							error_log(__FILE__ . ': ' . __LINE__ . ' ' . print_r($th->getMessage(), true) . PHP_EOL, 3, __DIR__ . '/Log.txt');
+						}
+					} else {
+						if (in_array($item->attribute, array_column($currentAttributesWithTermsArray, 'attributeSlug'))) {
+							$foundArrayKey = array_search($item->attribute, array_column($currentAttributesWithTermsArray, 'attributeSlug'));
+							$attributeId = $currentAttributesWithTermsArray[$foundArrayKey]['attributeId'];
+							$endpoint = 'products/attributes/' . $attributeId . '/terms';
+							$api->post($endpoint, $item);
+						}
+					}
+				}
+				break;
+			case 'tags':
+				$endpoint = 'products/tags/';
+				$currentTags = $this->getFormattedArrayOfExistingItems($endpoint, 'tags');
+
+				foreach ($items as $item) {
+					if (in_array($item->slug, $currentTags['slugs'])) {
+						$foundArrayKey = (array_search($item->slug, array_column($currentTags['tags'], 'slug')));
+						$id = $currentTags['tags'][$foundArrayKey]->id;
+						$api->put($endpoint . $id, $item);
+					} else {
+						$api->post($endpoint, $item);
+					}
+				}
+				break;
+			case 'variations':
+				break;
+			case 'images':
 				break;
 		}
 
 		wp_safe_redirect($_POST['_wp_http_referer']);
+	}
+
+	private function getImageIdByName($imageName)
+	{
+		global $wpdb;
+		$sql = "SELECT post_id FROM " . $wpdb->base_prefix . "postmeta WHERE meta_key = '_wp_attached_file' AND meta_value LIKE '%" . $imageName . "%';";
+		$result = $wpdb->get_results($sql);
+
+		return $result[0]->post_id;
+	}
+
+	/**
+	 * Get current attributes and return 2 arrays: a flattened
+	 */
+	private function getFormattedArrayOfExistingItems($endpoint, $type)
+	{
+		$siteUrl = get_site_url();
+		$api = new Client(
+			$siteUrl,
+			get_option('ppu-wc-key'),
+			get_option('ppu-wc-secret'),
+			[
+				'wp_api' => true,
+				'version' => 'wc/v3'
+			]
+		);
+
+		$currentArrayItems = $api->get($endpoint);
+		$currentArrayItemsSlugs = array_map(function ($e) {
+			return $e->slug;
+		}, $currentArrayItems);
+
+		return array($type => $currentArrayItems, 'slugs' => $currentArrayItemsSlugs);
+	}
+
+	/**
+	 * Get attribute ID by slug
+	 */
+	private function getAttributeIdBySlug($slug, $attributeArray)
+	{
+		$foundArrayKey = (array_search('pa_' . $slug, array_column($attributeArray, 'slug')));
+		return $attributeArray[$foundArrayKey]->id;
 	}
 
 	/**
@@ -187,9 +278,9 @@ class PpuAdmin
 	public function showOrders()
 	{
 		if (isset($_POST['order_id']) && $_POST['order_id'] != '') {
-			$endPoint = 'orders/' . esc_attr($_POST['order_id']);
+			$endpoint = 'orders/' . esc_attr($_POST['order_id']);
 		} else {
-			$endPoint = 'orders';
+			$endpoint = 'orders';
 		}
 
 		$siteUrl = get_site_url();
@@ -203,7 +294,7 @@ class PpuAdmin
 				'version' => 'wc/v3'
 			]
 		);
-		$result = $api->get($endPoint);
+		$result = $api->get($endpoint);
 
 		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
 	}
@@ -211,9 +302,9 @@ class PpuAdmin
 	public function showProducts()
 	{
 		if (isset($_POST['product_id']) && $_POST['product_id'] != '') {
-			$endPoint = 'products/' . esc_attr($_POST['order_id']);
+			$endpoint = 'products/' . esc_attr($_POST['order_id']);
 		} else {
-			$endPoint = 'products';
+			$endpoint = 'products';
 		}
 
 		$siteUrl = get_site_url();
@@ -227,7 +318,7 @@ class PpuAdmin
 				'version' => 'wc/v3'
 			]
 		);
-		$result = $api->get($endPoint);
+		$result = $api->get($endpoint);
 
 		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
 	}
