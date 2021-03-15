@@ -103,22 +103,26 @@ class PpuAdmin
 		switch ($data->type) {
 			case 'products':
 				$endpoint = 'products/';
-				foreach ($items as $item) {
+				$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 
+				foreach ($items as $item) {
 					// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
 					$productId = wc_get_product_id_by_sku($item->sku);
 
 					foreach ($item->categories as $category) { // match category slug to id
-						if (!is_int($category->id)) {
-							$category->id = get_term_by('slug', $category->id, 'product_cat')->term_id ?? 'uncategorized';
+						if (!is_int($category->slug)) {
+							$category->id = get_term_by('slug', $category->slug, 'product_cat')->term_id ?? 'uncategorized';
 						}
 					}
 
 					foreach ($item->tags as $tag) { // match category slug to id
-						if (!is_int($tag->id)) {
-							$tag->id = get_term_by('slug', $tag->id, 'product_tag')->term_id ?? 'uncategorized';
-							echo $tag->id;
+						if (!is_int($tag->slug)) {
+							$tag->id = get_term_by('slug', $tag->slug, 'product_tag')->term_id ?? 'uncategorized';
 						}
+					}
+
+					foreach ($item->attributes as $attribute) {
+						$attribute->id = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
 					}
 
 					// how to match images
@@ -127,6 +131,31 @@ class PpuAdmin
 						$api->put($endpoint . $productId, $item);
 					} else {
 						$api->post($endpoint, $item);
+					}
+				}
+				break;
+			case 'variations':
+				$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
+
+				// Products loop
+				foreach ($items as $item) {
+					$productId = wc_get_product_id_by_sku($item->parent_product_sku);
+					$endpoint = 'products/' . $productId . '/variations/';
+
+					// Variations loop
+					foreach ($item->variations as $variation) {
+						$variationId = wc_get_product_id_by_sku($variation->sku);
+
+						// Attributes loop
+						foreach ($variation->attributes as $variationAttribute) {
+							$variationAttribute->id = $this->getAttributeIdBySlug($variationAttribute->slug, $currentAttributes['attributes']);
+						}
+
+						if ($variationId != null || $variationId != 0) {
+							$api->put($endpoint . $variationId, $variation);
+						} else {
+							$api->post($endpoint, $variation);
+						}
 					}
 				}
 				break;
@@ -221,8 +250,6 @@ class PpuAdmin
 					}
 				}
 				break;
-			case 'variations':
-				break;
 			case 'images':
 				break;
 		}
@@ -302,7 +329,7 @@ class PpuAdmin
 	public function showProducts()
 	{
 		if (isset($_POST['product_id']) && $_POST['product_id'] != '') {
-			$endpoint = 'products/' . esc_attr($_POST['order_id']);
+			$endpoint = 'products/' . esc_attr($_POST['product_id']);
 		} else {
 			$endpoint = 'products';
 		}

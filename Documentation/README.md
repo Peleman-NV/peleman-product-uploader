@@ -6,9 +6,8 @@ This plugin enables easy uploading of Peleman products.
 
 -   Wordpress installation.
 -   WooCommerce plugin.
--   [Composer](https://getcomposer.org/) package manager must be installed on your system, to install the various vendor packages.
 
 ## Installation:
 
--   Place the plugin files in the WordPress plugin folder (wp-content/plugins) and activate it in the WordPress admin backend.
--   Run `composer install` to download the vendor packages.
+1. Place the plugin files in the WordPress plugin folder (wp-content/plugins) and activate it in the WordPress admin backend.
+2. In the WordPress admin panel, go to WooCommerce > Settings > Advanced > REST API > Add Key. The key needs Read/Write permissions.
