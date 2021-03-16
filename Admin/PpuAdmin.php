@@ -6,7 +6,6 @@ use Automattic\WooCommerce\Client;
 
 class PpuAdmin
 {
-
 	/**
 	 * The ID of this plugin.
 	 *
@@ -80,7 +79,7 @@ class PpuAdmin
 	/**
 	 * Process products JSON
 	 */
-	public function uploadJson()
+	public function uploadJsonViaForm()
 	{
 		check_admin_referer('upload_json');
 
@@ -114,6 +113,9 @@ class PpuAdmin
 		wp_safe_redirect($_POST['_wp_http_referer']);
 	}
 
+	/**
+	 * Create an API client to handle uploads
+	 */
 	private function apiClient()
 	{
 		$siteUrl = get_site_url();
@@ -128,6 +130,9 @@ class PpuAdmin
 		);
 	}
 
+	/**
+	 * Upload handler: products
+	 */
 	private function handleProducts($dataArray)
 	{
 		$api = $this->apiClient();
@@ -164,6 +169,9 @@ class PpuAdmin
 		}
 	}
 
+	/**
+	 * Upload handler: categories
+	 */
 	private function handleCategories($dataArray)
 	{
 		$api = $this->apiClient();
@@ -183,6 +191,10 @@ class PpuAdmin
 			}
 		}
 	}
+
+	/**
+	 * Upload handler: product variations
+	 */
 	private function handleProductVariations($dataArray)
 	{
 		$api = $this->apiClient();
@@ -212,6 +224,10 @@ class PpuAdmin
 		}
 	}
 
+
+	/**
+	 * Upload handler: attributes
+	 */
 	private function handleAttributes($dataArray)
 	{
 		$api = $this->apiClient();
@@ -228,6 +244,9 @@ class PpuAdmin
 		}
 	}
 
+	/**
+	 * Upload handler: attribute terms
+	 */
 	private function handleAttributeTerms($dataArray)
 	{
 		$api = $this->apiClient();
@@ -278,6 +297,9 @@ class PpuAdmin
 		}
 	}
 
+	/**
+	 * Upload handler: tags
+	 */
 	private function handleTags($dataArray)
 	{
 		$api = $this->apiClient();
@@ -295,6 +317,9 @@ class PpuAdmin
 		}
 	}
 
+	/**
+	 * Facilitaties linking images to categories, products, etc
+	 */
 	private function getImageIdByName($imageName)
 	{
 		global $wpdb;
@@ -364,6 +389,9 @@ class PpuAdmin
 		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
 	}
 
+	/**
+	 * Show one or all products
+	 */
 	public function showProducts()
 	{
 		if (isset($_POST['product_id']) && $_POST['product_id'] != '') {
