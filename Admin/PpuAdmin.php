@@ -87,8 +87,37 @@ class PpuAdmin
 		$jsonData = file_get_contents($_FILES['ppu-upload']['tmp_name']);
 		$data = json_decode($jsonData);
 
+		$items = $data->items;
+
+		switch ($data->type) {
+			case 'products':
+				$this->handleProducts($items);
+				break;
+			case 'variations':
+				$this->handleProductVariations($items);
+				break;
+			case 'categories':
+				$this->handleCategories($items);
+				break;
+			case 'attributes':
+				$this->handleAttributes($items);
+				break;
+			case 'terms':
+				$this->handleAttributeTerms($items);
+				break;
+			case 'tags':
+				$this->handleTags($items);
+				break;
+			case 'images':
+				break;
+		}
+		wp_safe_redirect($_POST['_wp_http_referer']);
+	}
+
+	private function apiClient()
+	{
 		$siteUrl = get_site_url();
-		$api = new Client(
+		return new Client(
 			$siteUrl,
 			get_option('ppu-wc-key'),
 			get_option('ppu-wc-secret'),
@@ -97,164 +126,173 @@ class PpuAdmin
 				'version' => 'wc/v3'
 			]
 		);
+	}
 
-		$items = $data->items;
+	private function handleProducts($dataArray)
+	{
+		$api = $this->apiClient();
+		$endpoint = 'products/';
+		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 
-		switch ($data->type) {
-			case 'products':
-				$endpoint = 'products/';
-				$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
+		foreach ($dataArray as $item) {
+			// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
+			$productId = wc_get_product_id_by_sku($item->sku);
 
-				foreach ($items as $item) {
-					// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
-					$productId = wc_get_product_id_by_sku($item->sku);
-
-					foreach ($item->categories as $category) { // match category slug to id
-						if (!is_int($category->slug)) {
-							$category->id = get_term_by('slug', $category->slug, 'product_cat')->term_id ?? 'uncategorized';
-						}
-					}
-
-					foreach ($item->tags as $tag) { // match category slug to id
-						if (!is_int($tag->slug)) {
-							$tag->id = get_term_by('slug', $tag->slug, 'product_tag')->term_id ?? 'uncategorized';
-						}
-					}
-
-					foreach ($item->attributes as $attribute) {
-						$attribute->id = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
-					}
-
-					// how to match images
-
-					if ($productId != null) {
-						$api->put($endpoint . $productId, $item);
-					} else {
-						$api->post($endpoint, $item);
-					}
+			foreach ($item->categories as $category) { // match category slug to id
+				if (!is_int($category->slug)) {
+					$category->id = get_term_by('slug', $category->slug, 'product_cat')->term_id ?? 'uncategorized';
 				}
-				break;
-			case 'variations':
-				$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
+			}
 
-				// Products loop
-				foreach ($items as $item) {
-					$productId = wc_get_product_id_by_sku($item->parent_product_sku);
-					$endpoint = 'products/' . $productId . '/variations/';
-
-					// Variations loop
-					foreach ($item->variations as $variation) {
-						$variationId = wc_get_product_id_by_sku($variation->sku);
-
-						// Attributes loop
-						foreach ($variation->attributes as $variationAttribute) {
-							$variationAttribute->id = $this->getAttributeIdBySlug($variationAttribute->slug, $currentAttributes['attributes']);
-						}
-
-						if ($variationId != null || $variationId != 0) {
-							$api->put($endpoint . $variationId, $variation);
-						} else {
-							$api->post($endpoint, $variation);
-						}
-					}
+			foreach ($item->tags as $tag) { // match category slug to id
+				if (!is_int($tag->slug)) {
+					$tag->id = get_term_by('slug', $tag->slug, 'product_tag')->term_id ?? 'uncategorized';
 				}
-				break;
-			case 'categories':
-				$endpoint = 'products/categories/';
-				foreach ($items as $item) {
+			}
 
-					$categoryId = get_term_by('slug', $item->slug, 'product_cat')->term_id;
-					if (isset($item->image->name)) {
-						$imageId = $this->getImageIdByName($item->image->name);
-						$item->image->id = $imageId;
-					}
+			foreach ($item->attributes as $attribute) {
+				$attribute->id = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
+			}
 
-					if ($categoryId != null) {
-						$api->put($endpoint . $categoryId, $item);
-					} else {
-						$api->post($endpoint, $item);
-					}
-				}
-				break;
-			case 'attributes':
-				$endpoint = 'products/attributes/';
+			// how to match images
 
-				$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+			if ($productId != null) {
+				$api->put($endpoint . $productId, $item);
+			} else {
+				$api->post($endpoint, $item);
+			}
+		}
+	}
 
-				foreach ($items as $item) {
-					if (in_array('pa_' . $item->slug, $currentAttributes['slugs'])) {
-						$id = $this->getAttributeIdBySlug($item->slug, $currentAttributes['attributes']);
-						$api->put($endpoint . $id, $item);
-					} else {
-						$api->post($endpoint, $item);
-					}
-				}
-				break;
-			case 'terms':
-				$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
+	private function handleCategories($dataArray)
+	{
+		$api = $this->apiClient();
+		$endpoint = 'products/categories/';
+		foreach ($dataArray as $item) {
 
-				$currentAttributesWithTermsArray = array();
-				foreach ($currentAttributes['attributes'] as $attributes) {
-					$termsEndpoint = 'products/attributes/' . $attributes->id . '/terms';
-					$attributeTerms = $api->get($termsEndpoint);
+			$categoryId = get_term_by('slug', $item->slug, 'product_cat')->term_id;
+			if (isset($item->image->name)) {
+				$imageId = $this->getImageIdByName($item->image->name);
+				$item->image->id = $imageId;
+			}
 
-					if (empty($attributeTerms)) {
-						array_push($currentAttributesWithTermsArray, array(
-							'attributeId' => $attributes->id,
-							'attributeSlug' => str_replace('pa_', '', $attributes->slug),
-						));
-					} else {
-						foreach ($attributeTerms as $term) {
-							array_push($currentAttributesWithTermsArray, array(
-								'attributeId' => $attributes->id,
-								'attributeSlug' => str_replace('pa_', '', $attributes->slug),
-								'termId' => $term->id,
-								'termSlug' => $term->slug
-							));
-						}
-					}
+			if ($categoryId != null) {
+				$api->put($endpoint . $categoryId, $item);
+			} else {
+				$api->post($endpoint, $item);
+			}
+		}
+	}
+	private function handleProductVariations($dataArray)
+	{
+		$api = $this->apiClient();
+		$endpoint = 'products/attributes/';
+		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+
+		// Products loop
+		foreach ($dataArray as $item) {
+			$productId = wc_get_product_id_by_sku($item->parent_product_sku);
+			$endpoint = 'products/' . $productId . '/variations/';
+
+			// Variations loop
+			foreach ($item->variations as $variation) {
+				$variationId = wc_get_product_id_by_sku($variation->sku);
+
+				// Attributes loop
+				foreach ($variation->attributes as $variationAttribute) {
+					$variationAttribute->id = $this->getAttributeIdBySlug($variationAttribute->slug, $currentAttributes['attributes']);
 				}
 
-				foreach ($items as $item) {
-					if (in_array($item->slug, array_column($currentAttributesWithTermsArray, 'termSlug'))) {
-						$foundArrayKey = array_search($item->slug, array_column($currentAttributesWithTermsArray, 'termSlug'));
-						$attributeId = $currentAttributesWithTermsArray[$foundArrayKey]['attributeId'];
-						$termId = $currentAttributesWithTermsArray[$foundArrayKey]['termId'];
-						$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $termId;
-						try {
-							$api->put($endpoint, $item);
-						} catch (\Throwable $th) {
-							error_log(__FILE__ . ': ' . __LINE__ . ' ' . print_r($th->getMessage(), true) . PHP_EOL, 3, __DIR__ . '/Log.txt');
-						}
-					} else {
-						if (in_array($item->attribute, array_column($currentAttributesWithTermsArray, 'attributeSlug'))) {
-							$foundArrayKey = array_search($item->attribute, array_column($currentAttributesWithTermsArray, 'attributeSlug'));
-							$attributeId = $currentAttributesWithTermsArray[$foundArrayKey]['attributeId'];
-							$endpoint = 'products/attributes/' . $attributeId . '/terms';
-							$api->post($endpoint, $item);
-						}
-					}
+				if ($variationId != null || $variationId != 0) {
+					$api->put($endpoint . $variationId, $variation);
+				} else {
+					$api->post($endpoint, $variation);
 				}
-				break;
-			case 'tags':
-				$endpoint = 'products/tags/';
-				$currentTags = $this->getFormattedArrayOfExistingItems($endpoint, 'tags');
+			}
+		}
+	}
 
-				foreach ($items as $item) {
-					if (in_array($item->slug, $currentTags['slugs'])) {
-						$foundArrayKey = (array_search($item->slug, array_column($currentTags['tags'], 'slug')));
-						$id = $currentTags['tags'][$foundArrayKey]->id;
-						$api->put($endpoint . $id, $item);
-					} else {
-						$api->post($endpoint, $item);
-					}
+	private function handleAttributes($dataArray)
+	{
+		$api = $this->apiClient();
+		$endpoint = 'products/attributes/';
+		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+
+		foreach ($dataArray as $item) {
+			if (in_array('pa_' . $item->slug, $currentAttributes['slugs'])) {
+				$id = $this->getAttributeIdBySlug($item->slug, $currentAttributes['attributes']);
+				$api->put($endpoint . $id, $item);
+			} else {
+				$api->post($endpoint, $item);
+			}
+		}
+	}
+
+	private function handleAttributeTerms($dataArray)
+	{
+		$api = $this->apiClient();
+		$endpoint = 'products/attributes/';
+		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+
+		$currentAttributesWithTermsArray = array();
+		foreach ($currentAttributes['attributes'] as $attributes) {
+			$termsEndpoint = 'products/attributes/' . $attributes->id . '/terms';
+			$attributeTerms = $api->get($termsEndpoint);
+
+			if (empty($attributeTerms)) {
+				array_push($currentAttributesWithTermsArray, array(
+					'attributeId' => $attributes->id,
+					'attributeSlug' => str_replace('pa_', '', $attributes->slug),
+				));
+			} else {
+				foreach ($attributeTerms as $term) {
+					array_push($currentAttributesWithTermsArray, array(
+						'attributeId' => $attributes->id,
+						'attributeSlug' => str_replace('pa_', '', $attributes->slug),
+						'termId' => $term->id,
+						'termSlug' => $term->slug
+					));
 				}
-				break;
-			case 'images':
-				break;
+			}
 		}
 
-		wp_safe_redirect($_POST['_wp_http_referer']);
+		foreach ($dataArray as $item) {
+			if (in_array($item->slug, array_column($currentAttributesWithTermsArray, 'termSlug'))) {
+				$foundArrayKey = array_search($item->slug, array_column($currentAttributesWithTermsArray, 'termSlug'));
+				$attributeId = $currentAttributesWithTermsArray[$foundArrayKey]['attributeId'];
+				$termId = $currentAttributesWithTermsArray[$foundArrayKey]['termId'];
+				$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $termId;
+				try {
+					$api->put($endpoint, $item);
+				} catch (\Throwable $th) {
+					error_log(__FILE__ . ': ' . __LINE__ . ' ' . print_r($th->getMessage(), true) . PHP_EOL, 3, __DIR__ . '/Log.txt');
+				}
+			} else {
+				if (in_array($item->attribute, array_column($currentAttributesWithTermsArray, 'attributeSlug'))) {
+					$foundArrayKey = array_search($item->attribute, array_column($currentAttributesWithTermsArray, 'attributeSlug'));
+					$attributeId = $currentAttributesWithTermsArray[$foundArrayKey]['attributeId'];
+					$endpoint = 'products/attributes/' . $attributeId . '/terms';
+					$api->post($endpoint, $item);
+				}
+			}
+		}
+	}
+
+	private function handleTags($dataArray)
+	{
+		$api = $this->apiClient();
+		$endpoint = 'products/tags/';
+		$currentTags = $this->getFormattedArrayOfExistingItems($endpoint, 'tags');
+
+		foreach ($dataArray as $item) {
+			if (in_array($item->slug, $currentTags['slugs'])) {
+				$foundArrayKey = (array_search($item->slug, array_column($currentTags['tags'], 'slug')));
+				$id = $currentTags['tags'][$foundArrayKey]->id;
+				$api->put($endpoint . $id, $item);
+			} else {
+				$api->post($endpoint, $item);
+			}
+		}
 	}
 
 	private function getImageIdByName($imageName)
