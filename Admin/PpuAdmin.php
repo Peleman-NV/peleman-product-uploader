@@ -114,6 +114,11 @@ class PpuAdmin
 	}
 
 	/**
+	 * Register API routes
+	 */
+
+
+	/**
 	 * Create an API client to handle uploads
 	 */
 	private function apiClient()
@@ -276,10 +281,22 @@ class PpuAdmin
 		}
 
 		foreach ($dataArray as $item) {
-			if (in_array($item->slug, array_column($currentAttributesWithTermsArray, 'termSlug'))) {
-				$foundArrayKey = array_search($item->slug, array_column($currentAttributesWithTermsArray, 'termSlug'));
-				$attributeId = $currentAttributesWithTermsArray[$foundArrayKey]['attributeId'];
-				$termId = $currentAttributesWithTermsArray[$foundArrayKey]['termId'];
+			$tempArray = array_filter($currentAttributesWithTermsArray, function ($currentAttributes) use ($item) {
+				if (isset($currentAttributes['termSlug']) && $currentAttributes['termSlug'] == $item->slug) {
+					return array(
+						'attributeId' => $currentAttributes['attributeId'],
+						'termId' => $currentAttributes['termId']
+					);
+				} else if (!isset($currentAttributes['termSlug']) && $currentAttributes['attributeSlug'] == $item->attribute) {
+					return array('attributeId' => $currentAttributes['attributeId']);
+				}
+			});
+
+			$tempArray = reset($tempArray);
+
+			if (key_exists('termId', $tempArray)) {
+				$attributeId = $tempArray['attributeId'];
+				$termId = $tempArray['termId'];
 				$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $termId;
 				try {
 					$api->put($endpoint, $item);
@@ -287,12 +304,9 @@ class PpuAdmin
 					error_log(__FILE__ . ': ' . __LINE__ . ' ' . print_r($th->getMessage(), true) . PHP_EOL, 3, __DIR__ . '/Log.txt');
 				}
 			} else {
-				if (in_array($item->attribute, array_column($currentAttributesWithTermsArray, 'attributeSlug'))) {
-					$foundArrayKey = array_search($item->attribute, array_column($currentAttributesWithTermsArray, 'attributeSlug'));
-					$attributeId = $currentAttributesWithTermsArray[$foundArrayKey]['attributeId'];
-					$endpoint = 'products/attributes/' . $attributeId . '/terms';
-					$api->post($endpoint, $item);
-				}
+				$attributeId = $tempArray['attributeId'];
+				$endpoint = 'products/attributes/' . $attributeId . '/terms';
+				$api->post($endpoint, $item);
 			}
 		}
 	}
