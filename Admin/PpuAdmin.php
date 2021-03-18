@@ -209,39 +209,25 @@ class PpuAdmin
 	 */
 	public function registerGetVariationsEndpoint()
 	{
-		register_rest_route('ppu/v1', '/productvariations(?:/(?P<page>\d+))?', array(
+		register_rest_route('ppu/v1', '/product/(?P<sku>\w+)/variations(?:/(?P<page>\d+))?', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'getProductVariations'),
-			'args' => array('page'),
+			'args' => array('sku', 'page'),
 		));
 	}
 
-	//
 	public function getProductVariations($request)
 	{
+		$productId = wc_get_product_id_by_sku($request['sku']);
 		$page = $request['page'];
 		if (!isset($page) || $page == '') $page = 1;
 		$api = $this->apiClient();
-		$endpoint = 'products';
-		$currentProducts = $api->get(
-			$endpoint,
-			array(
-				'page' => $page,
-				'per_page' => 100
-			)
-		);
-		$productIds = array_map(function ($e) {
-			return $e->id;
-		}, $currentProducts);
 
-		return $productIds;
-		// $variationsArray = array();
-		// foreach ($attributeIds as $attributeId) {
-		// 	$endpoint = 'products/attributes/' . $attributeId . '/terms/';
-		// 	$result = $api->get($endpoint);
-		// 	array_push($termsArray, $result);
-		// }
-		// return $termsArray;
+		$endpoint = 'products/' . $productId . '/variations/';
+		return $api->get($endpoint,	array(
+			'page' => $page,
+			'per_page' => 100
+		));
 	}
 
 	/**
