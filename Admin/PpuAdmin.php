@@ -84,6 +84,7 @@ class PpuAdmin
 		register_rest_route('ppu/v1', '/attributes', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'getAttributes'),
+			'permission_callback' => '__return_true'
 		));
 	}
 
@@ -102,7 +103,8 @@ class PpuAdmin
 		register_rest_route('ppu/v1', '/tags(?:/(?P<page>\d+))?', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'getTags'),
-			'args' => array('page')
+			'args' => array('page'),
+			'permission_callback' => '__return_true'
 		));
 	}
 
@@ -126,7 +128,8 @@ class PpuAdmin
 		register_rest_route('ppu/v1', '/categories(?:/(?P<page>\d+))?', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'getCategories'),
-			'args' => array('page')
+			'args' => array('page'),
+			'permission_callback' => '__return_true'
 		));
 	}
 
@@ -150,7 +153,8 @@ class PpuAdmin
 		register_rest_route('ppu/v1', '/products(?:/(?P<page>\d+))?', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'getProducts'),
-			'args' => array('page')
+			'args' => array('page'),
+			'permission_callback' => '__return_true'
 		));
 	}
 
@@ -174,7 +178,8 @@ class PpuAdmin
 		register_rest_route('ppu/v1', '/terms(?:/(?P<page>\d+))?', array(
 			'methods' => 'GET',
 			'callback' => array($this, 'getTerms'),
-			'args' => array('page')
+			'args' => array('page'),
+			'permission_callback' => '__return_true'
 		));
 	}
 
@@ -213,6 +218,7 @@ class PpuAdmin
 			'methods' => 'GET',
 			'callback' => array($this, 'getProductVariations'),
 			'args' => array('sku', 'page'),
+			'permission_callback' => '__return_true'
 		));
 	}
 
@@ -230,6 +236,95 @@ class PpuAdmin
 		));
 	}
 
+	/**	
+	 * Register post product variations endpoint
+	 */
+	public function registerPostAttributesEndpoint()
+	{
+		register_rest_route('ppu/v1', '/attributes', array(
+			'methods' => 'POST',
+			'callback' => array($this, 'postAttributes'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function postAttributes($request)
+	{
+		$items = json_decode($request->get_body())->items;
+		$this->handleAttributes($items);
+	}
+
+	/**	
+	 * Register post tags endpoint
+	 */
+	public function registerPostTagsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/tags', array(
+			'methods' => 'POST',
+			'callback' => array($this, 'postTags'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function postTags($request)
+	{
+		$items = json_decode($request->get_body())->items;
+		$this->handleTags($items);
+	}
+
+	/**	
+	 * Register post categories endpoint
+	 */
+	public function registerPostCategoriesEndpoint()
+	{
+		register_rest_route('ppu/v1', '/categories', array(
+			'methods' => 'POST',
+			'callback' => array($this, 'postCategories'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function postCategories($request)
+	{
+		$items = json_decode($request->get_body())->items;
+		$this->handleCategories($items);
+	}
+
+	/**	
+	 * Register post products endpoint
+	 */
+	public function registerPostProductsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/products', array(
+			'methods' => 'POST',
+			'callback' => array($this, 'postProducts'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function postProducts($request)
+	{
+		$items = json_decode($request->get_body())->items;
+		$this->handleProducts($items);
+	}
+
+	/**	
+	 * Register post variations endpoint
+	 */
+	public function registerPostVariationsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/productvariations', array(
+			'methods' => 'POST',
+			'callback' => array($this, 'postVariations'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function postVariations($request)
+	{
+		$items = json_decode($request->get_body())->items;
+		$this->handleProductVariations($items);
+	}
 	/**
 	 * Process products JSON
 	 */
@@ -317,7 +412,6 @@ class PpuAdmin
 			foreach ($item->attributes as $attribute) {
 				$attribute->id = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
 			}
-
 			// how to match images
 
 			if ($productId != null) {
@@ -362,6 +456,7 @@ class PpuAdmin
 
 		// Products loop
 		foreach ($dataArray as $item) {
+
 			$productId = wc_get_product_id_by_sku($item->parent_product_sku);
 			$endpoint = 'products/' . $productId . '/variations/';
 
