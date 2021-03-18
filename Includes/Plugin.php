@@ -5,6 +5,7 @@ namespace PelemanProductUploader\Includes;
 use PelemanProductUploader\Includes\PpuLoader;
 use PelemanProductUploader\Includes\PpuI18n;
 use PelemanProductUploader\Admin\PpuAdmin;
+use PelemanProductUploader\PublicPage\PpuPublic;
 
 /**
  * The core plugin class.
@@ -93,7 +94,15 @@ class Plugin
 
 		$this->loader->add_action('admin_post_show_orders', $plugin_admin, 'showOrders');
 		$this->loader->add_action('admin_post_show_products', $plugin_admin, 'showProducts');
+
+		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetAttributesEndpoint');
+		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetCategoriesEndpoint');
+		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetTagsEndpoint');
+		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetProductsEndpoint');
+		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetTermsEndpoint');
+		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetVariationsEndpoint');
 	}
+
 
 	/**
 	 * Run the loader to execute all of the hooks with WordPress.

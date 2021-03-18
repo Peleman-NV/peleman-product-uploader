@@ -76,6 +76,174 @@ class PpuAdmin
 		register_setting('ppu_custom_settings', 'ppu-wc-secret');
 	}
 
+	/**	
+	 * Register get attributes endpoint
+	 */
+	public function registerGetAttributesEndpoint()
+	{
+		register_rest_route('ppu/v1', '/attributes', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'getAttributes'),
+		));
+	}
+
+	public function getAttributes()
+	{
+		$api = $this->apiClient();
+		$endpoint = 'products/attributes/';
+		return $api->get($endpoint);
+	}
+
+	/**	
+	 * Register get tags endpoint
+	 */
+	public function registerGetTagsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/tags(?:/(?P<page>\d+))?', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'getTags'),
+			'args' => array('page')
+		));
+	}
+
+	public function getTags($request)
+	{
+		$page = $request['page'];
+		if (!isset($page) || $page == '') $page = 1;
+		$api = $this->apiClient();
+		$endpoint = 'products/tags/';
+		return $api->get($endpoint,	array(
+			'page' => $page,
+			'per_page' => 100
+		));
+	}
+
+	/**	
+	 * Register get categories endpoint
+	 */
+	public function registerGetCategoriesEndpoint()
+	{
+		register_rest_route('ppu/v1', '/categories(?:/(?P<page>\d+))?', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'getCategories'),
+			'args' => array('page')
+		));
+	}
+
+	public function getCategories($request)
+	{
+		$page = $request['page'];
+		if (!isset($page) || $page == '') $page = 1;
+		$api = $this->apiClient();
+		$endpoint = 'products/categories/';
+		return $api->get($endpoint,	array(
+			'page' => $page,
+			'per_page' => 100
+		));
+	}
+
+	/**	
+	 * Register get products endpoint
+	 */
+	public function registerGetProductsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/products(?:/(?P<page>\d+))?', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'getProducts'),
+			'args' => array('page')
+		));
+	}
+
+	public function getProducts($request)
+	{
+		$page = $request['page'];
+		if (!isset($page) || $page == '') $page = 1;
+		$api = $this->apiClient();
+		$endpoint = 'products/';
+		return $api->get($endpoint,	array(
+			'page' => $page,
+			'per_page' => 100
+		));
+	}
+
+	/**	
+	 * Register get terms endpoint
+	 */
+	public function registerGetTermsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/terms(?:/(?P<page>\d+))?', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'getTerms'),
+			'args' => array('page')
+		));
+	}
+
+	public function getTerms($request)
+	{
+		$page = $request['page'];
+		if (!isset($page) || $page == '') $page = 1;
+		$api = $this->apiClient();
+		$endpoint = 'products/attributes';
+		$currentAttributes = $api->get(
+			$endpoint,
+			array(
+				'page' => $page,
+				'per_page' => 100
+			)
+		);
+		$attributeIds = array_map(function ($e) {
+			return $e->id;
+		}, $currentAttributes);
+
+		$termsArray = array();
+		foreach ($attributeIds as $attributeId) {
+			$endpoint = 'products/attributes/' . $attributeId . '/terms/';
+			$result = $api->get($endpoint);
+			array_push($termsArray, $result);
+		}
+		return $termsArray;
+	}
+
+	/**	
+	 * Register get product variations endpoint
+	 */
+	public function registerGetVariationsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/productvariations(?:/(?P<page>\d+))?', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'getProductVariations'),
+			'args' => array('page'),
+		));
+	}
+
+	//
+	public function getProductVariations($request)
+	{
+		$page = $request['page'];
+		if (!isset($page) || $page == '') $page = 1;
+		$api = $this->apiClient();
+		$endpoint = 'products';
+		$currentProducts = $api->get(
+			$endpoint,
+			array(
+				'page' => $page,
+				'per_page' => 100
+			)
+		);
+		$productIds = array_map(function ($e) {
+			return $e->id;
+		}, $currentProducts);
+
+		return $productIds;
+		// $variationsArray = array();
+		// foreach ($attributeIds as $attributeId) {
+		// 	$endpoint = 'products/attributes/' . $attributeId . '/terms/';
+		// 	$result = $api->get($endpoint);
+		// 	array_push($termsArray, $result);
+		// }
+		// return $termsArray;
+	}
+
 	/**
 	 * Process products JSON
 	 */
@@ -228,7 +396,6 @@ class PpuAdmin
 			}
 		}
 	}
-
 
 	/**
 	 * Upload handler: attributes
