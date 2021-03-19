@@ -108,6 +108,8 @@ class Plugin
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostProductsEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostTermsEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostVariationsEndpoint');
+
+		//$this->loader->add_action('rest_api_init', $plugin_admin, 'registerDeleteAttributesEndpoint');
 	}
 
 

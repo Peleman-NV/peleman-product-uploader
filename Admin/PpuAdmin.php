@@ -95,6 +95,26 @@ class PpuAdmin
 		return $api->get($endpoint);
 	}
 
+	// /**	
+	//  * Register delete attributes endpoint
+	//  */
+	// public function registerDeleteAttributesEndpoint()
+	// {
+	// 	register_rest_route('ppu/v1', '/attributes/(?P<slug>\w+)', array(
+	// 		'methods' => 'DELETE',
+	// 		'callback' => array($this, 'deleteAttribute'),
+	// 		'args' => 'slug',
+	// 		'permission_callback' => '__return_true'
+	// 	));
+	// }
+
+	// public function deleteAttribute()
+	// {
+	// 	$api = $this->apiClient();
+	// 	$endpoint = 'products/attributes/';
+	// 	return $api->get($endpoint);
+	// }
+
 	/**	
 	 * Register get tags endpoint
 	 */
@@ -313,7 +333,7 @@ class PpuAdmin
 	 */
 	public function registerPostVariationsEndpoint()
 	{
-		register_rest_route('ppu/v1', '/productvariations', array(
+		register_rest_route('ppu/v1', '/variations', array(
 			'methods' => 'POST',
 			'callback' => array($this, 'postVariations'),
 			'permission_callback' => '__return_true'
@@ -325,6 +345,25 @@ class PpuAdmin
 		$items = json_decode($request->get_body())->items;
 		$this->handleProductVariations($items);
 	}
+
+	/**	
+	 * Register post terms endpoint
+	 */
+	public function registerPostTermsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/terms', array(
+			'methods' => 'POST',
+			'callback' => array($this, 'postTerms'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function postTerms($request)
+	{
+		$items = json_decode($request->get_body())->items;
+		$this->handleAttributeTerms($items);
+	}
+
 	/**
 	 * Process products JSON
 	 */
@@ -502,59 +541,47 @@ class PpuAdmin
 	 */
 	private function handleAttributeTerms($dataArray)
 	{
-		$api = $this->apiClient();
-		$endpoint = 'products/attributes/';
-		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 
-		$currentAttributesWithTermsArray = array();
+		$currentAttributesArray = array();
 		foreach ($currentAttributes['attributes'] as $attributes) {
-			$termsEndpoint = 'products/attributes/' . $attributes->id . '/terms';
-			$attributeTerms = $api->get($termsEndpoint);
-
-			if (empty($attributeTerms)) {
-				array_push($currentAttributesWithTermsArray, array(
-					'attributeId' => $attributes->id,
-					'attributeSlug' => str_replace('pa_', '', $attributes->slug),
-				));
-			} else {
-				foreach ($attributeTerms as $term) {
-					array_push($currentAttributesWithTermsArray, array(
-						'attributeId' => $attributes->id,
-						'attributeSlug' => str_replace('pa_', '', $attributes->slug),
-						'termId' => $term->id,
-						'termSlug' => $term->slug
-					));
-				}
-			}
+			array_push($currentAttributesArray, array(
+				'attributeId' => $attributes->id,
+				'attributeSlug' => $attributes->slug
+			));
 		}
 
+		global $wpdb;
+
+		$sql = "SELECT REPLACE(wp_term_taxonomy.taxonomy, 'pa_', '') as attribute, wp_terms.term_id as termId,
+			wp_terms.slug FROM wordpresstest.wp_term_taxonomy 
+			inner JOIN wordpresstest.wp_terms ON wp_term_taxonomy.term_id = wordpresstest.wp_terms.term_id 
+			WHERE taxonomy LIKE 'pa_%';";
+		$currentTerms = $wpdb->get_results($sql);
+
 		foreach ($dataArray as $item) {
-			$tempArray = array_filter($currentAttributesWithTermsArray, function ($currentAttributes) use ($item) {
-				if (isset($currentAttributes['termSlug']) && $currentAttributes['termSlug'] == $item->slug) {
-					return array(
-						'attributeId' => $currentAttributes['attributeId'],
-						'termId' => $currentAttributes['termId']
-					);
-				} else if (!isset($currentAttributes['termSlug']) && $currentAttributes['attributeSlug'] == $item->attribute) {
-					return array('attributeId' => $currentAttributes['attributeId']);
+			$tempArray = array_filter($currentTerms, function ($currentTerm) use ($item) {
+				if ($currentTerm->slug == $item->slug) {
+					return true;
+				} else {
+					return false;
 				}
 			});
 
-			$tempArray = reset($tempArray);
+			$attributeArrayKey = array_search('pa_' . $item->attribute, array_column($currentAttributesArray, 'attributeSlug'));
+			$attributeId = array_column($currentAttributesArray, 'attributeId')[$attributeArrayKey];
 
-			if (key_exists('termId', $tempArray)) {
-				$attributeId = $tempArray['attributeId'];
-				$termId = $tempArray['termId'];
-				$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $termId;
-				try {
-					$api->put($endpoint, $item);
-				} catch (\Throwable $th) {
-					error_log(__FILE__ . ': ' . __LINE__ . ' ' . print_r($th->getMessage(), true) . PHP_EOL, 3, __DIR__ . '/Log.txt');
-				}
-			} else {
-				$attributeId = $tempArray['attributeId'];
+			$api = $this->apiClient();
+
+			if (empty($tempArray)) {
+				// term slug not found
 				$endpoint = 'products/attributes/' . $attributeId . '/terms';
 				$api->post($endpoint, $item);
+			} else {
+				$tempArray = reset($tempArray);
+				// term slug found
+				$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $tempArray->termId;
+				$api->put($endpoint, $item);
 			}
 		}
 	}
