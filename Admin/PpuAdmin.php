@@ -95,26 +95,6 @@ class PpuAdmin
 		return $api->get($endpoint);
 	}
 
-	// /**	
-	//  * Register delete attributes endpoint
-	//  */
-	// public function registerDeleteAttributesEndpoint()
-	// {
-	// 	register_rest_route('ppu/v1', '/attributes/(?P<slug>\w+)', array(
-	// 		'methods' => 'DELETE',
-	// 		'callback' => array($this, 'deleteAttribute'),
-	// 		'args' => 'slug',
-	// 		'permission_callback' => '__return_true'
-	// 	));
-	// }
-
-	// public function deleteAttribute()
-	// {
-	// 	$api = $this->apiClient();
-	// 	$endpoint = 'products/attributes/';
-	// 	return $api->get($endpoint);
-	// }
-
 	/**	
 	 * Register get tags endpoint
 	 */
@@ -362,6 +342,120 @@ class PpuAdmin
 	{
 		$items = json_decode($request->get_body())->items;
 		$this->handleAttributeTerms($items);
+	}
+
+	/**	
+	 * Register delete attributes endpoint
+	 */
+	public function registerDeleteAttributesEndpoint()
+	{
+		register_rest_route('ppu/v1', '/attributes/(?P<slug>\w+)', array(
+			'methods' => 'DELETE',
+			'callback' => array($this, 'deleteAttributes'),
+			'args' => array('slug'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function deleteAttributes($request)
+	{
+		$slug = $request['slug'];
+		return $slug;
+	}
+
+	/**	
+	 * Register delete categories endpoint
+	 */
+	public function registerDeleteCategoriesEndpoint()
+	{
+		register_rest_route('ppu/v1', '/categories/(?P<slug>\w+)', array(
+			'methods' => 'DELETE',
+			'callback' => array($this, 'deleteCategories'),
+			'args' => array('slug'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function deleteCategories($request)
+	{
+		$slug = $request['slug'];
+		return $slug;
+	}
+
+	/**	
+	 * Register delete tags endpoint
+	 */
+	public function registerDeleteTagsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/tags/(?P<slug>\w+)', array(
+			'methods' => 'DELETE',
+			'callback' => array($this, 'deleteTags'),
+			'args' => array('slug'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function deleteTags($request)
+	{
+		$slug = $request['slug'];
+		return $slug;
+	}
+
+	/**	
+	 * Register delete product endpoint
+	 */
+	public function registerDeleteProductsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/product/(?P<sku>\w+)', array(
+			'methods' => 'DELETE',
+			'callback' => array($this, 'deleteProducts'),
+			'args' => array('sku'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function deleteProducts($request)
+	{
+		$slug = $request['slug'];
+		return $slug;
+	}
+
+	/**	
+	 * Register delete terms endpoint
+	 */
+	public function registerDeleteTermsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/terms/(?P<slug>\w+)', array(
+			'methods' => 'DELETE',
+			'callback' => array($this, 'deleteTerms'),
+			'args' => array('slug'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function deleteTerms($request)
+	{
+		$slug = $request['slug'];
+		return $slug;
+	}
+
+	/**	
+	 * Register delete variations endpoint
+	 */
+	public function registerDeleteVariationsEndpoint()
+	{
+		register_rest_route('ppu/v1', '/variations/(?P<sku>\w+)', array(
+			'methods' => 'DELETE',
+			'callback' => array($this, 'deleteVariations'),
+			'args' => array('sku'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function deleteVariations($request)
+	{
+		$slug = $request['slug'];
+		return $slug;
 	}
 
 	/**
