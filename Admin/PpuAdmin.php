@@ -592,6 +592,7 @@ class PpuAdmin
 					'product' => $item->name
 				));
 			}
+			$response = array();
 		}
 
 		wp_send_json($mainResponse, 200);
@@ -628,10 +629,11 @@ class PpuAdmin
 		$api = $this->apiClient();
 		$endpoint = 'products/attributes/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+		$mainResponse = array();
 
 		// Products loop
 		foreach ($dataArray as $item) {
-
+			$response->status = 'success';
 			$productId = wc_get_product_id_by_sku($item->parent_product_sku);
 			$endpoint = 'products/' . $productId . '/variations/';
 
@@ -640,17 +642,53 @@ class PpuAdmin
 				$variationId = wc_get_product_id_by_sku($variation->sku);
 
 				// Attributes loop
-				foreach ($variation->attributes as $variationAttribute) {
-					$variationAttribute->id = $this->getAttributeIdBySlug($variationAttribute->slug, $currentAttributes['attributes']);
+				if (isset($variation->attributes) && $variation->attributes != null) {
+					foreach ($variation->attributes as $variationAttribute) {
+						$attributeLookup = $this->getAttributeIdBySlug($variationAttribute->slug, $currentAttributes['attributes']);
+						if ($attributeLookup['result'] == 'error') {
+							$response->status = 'error';
+							$response->message = "Attribute {$attributeLookup['slug']} not found";
+						} else {
+							$variationAttribute->id = $attributeLookup['id'];
+						}
+					}
 				}
 
-				if ($variationId != null || $variationId != 0) {
-					$api->put($endpoint . $variationId, $variation);
-				} else {
-					$api->post($endpoint, $variation);
+				if ($response->status != 'error') {
+					try {
+						if ($variationId != 0 || $variationId != null) {
+							$response = $api->put($endpoint . $variationId, $variation);
+							$response->status = 'success';
+							$response->action = 'modify variation';
+						} else {
+							$response = $api->post($endpoint, $variation);
+							$response->status = 'success';
+							$response->action = 'create variation';
+						}
+					} catch (\Throwable $th) {
+						$response->status = 'error';
+						$response->message = $th->getMessage();
+					}
 				}
+				if ($response->status == 'success') {
+					array_push($mainResponse, array(
+						'status' => $response->status,
+						'action' => $response->action,
+						'id' => $response->id,
+						'product' => $variation->sku
+					));
+				} else {
+					array_push($mainResponse, array(
+						'status' => $response->status,
+						'message' => $response->message,
+						'product' => $variation->sku
+					));
+				}
+				$response = array();
 			}
 		}
+
+		wp_send_json($mainResponse, 200);
 	}
 
 	/**
@@ -661,15 +699,44 @@ class PpuAdmin
 		$api = $this->apiClient();
 		$endpoint = 'products/attributes/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+		$mainResponse = array();
 
 		foreach ($dataArray as $item) {
-			if (in_array('pa_' . $item->slug, $currentAttributes['slugs'])) {
-				$id = $this->getAttributeIdBySlug($item->slug, $currentAttributes['attributes']);
-				$api->put($endpoint . $id, $item);
-			} else {
-				$api->post($endpoint, $item);
+			try {
+				if (in_array('pa_' . $item->slug, $currentAttributes['slugs'])) {
+					$id = $this->getAttributeIdBySlug($item->slug, $currentAttributes['attributes'])['id'];
+					$response = $api->put($endpoint . $id, $item);
+					$response->status = 'success';
+					$response->action = 'modify attribute';
+				} else {
+					$response = $api->post($endpoint, $item);
+					$response->status = 'success';
+					$response->action = 'create attribute';
+				}
+			} catch (\Throwable $th) {
+				$response->status = 'error';
+				$response->message = $th->getMessage();
 			}
+
+			if ($response->status == 'success') {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'action' => $response->action,
+					'id' => $response->id,
+					'attribute' => $response->name
+				));
+			} else {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'message' => $response->message,
+					'attribute' => $response->name
+				));
+			}
+			$response = array();
 		}
+
+
+		wp_send_json($mainResponse, 200);
 	}
 
 	/**
