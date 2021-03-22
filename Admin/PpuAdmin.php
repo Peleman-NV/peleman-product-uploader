@@ -3,6 +3,7 @@
 namespace PelemanProductUploader\Admin;
 
 use Automattic\WooCommerce\Client;
+use WP_REST_Response;
 
 class PpuAdmin
 {
@@ -472,22 +473,22 @@ class PpuAdmin
 
 		switch ($data->type) {
 			case 'products':
-				$this->handleProducts($items);
+				$response = $this->handleProducts($items);
 				break;
 			case 'variations':
-				$this->handleProductVariations($items);
+				$response = $this->handleProductVariations($items);
 				break;
 			case 'categories':
-				$this->handleCategories($items);
+				$response = $this->handleCategories($items);
 				break;
 			case 'attributes':
-				$this->handleAttributes($items);
+				$response = $this->handleAttributes($items);
 				break;
 			case 'terms':
-				$this->handleAttributeTerms($items);
+				$response = $this->handleAttributeTerms($items);
 				break;
 			case 'tags':
-				$this->handleTags($items);
+				$response = $this->handleTags($items);
 				break;
 			case 'images':
 				break;
@@ -525,34 +526,75 @@ class PpuAdmin
 		$api = $this->apiClient();
 		$endpoint = 'products/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
+		$mainResponse = array();
 
 		foreach ($dataArray as $item) {
+			$response->status = 'success';
 			// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
 			$productId = wc_get_product_id_by_sku($item->sku);
 
-			foreach ($item->categories as $category) { // match category slug to id
-				if (!is_int($category->slug)) {
-					$category->id = get_term_by('slug', $category->slug, 'product_cat')->term_id ?? 'uncategorized';
+			if (isset($item->categories) && $item->categories != null) {
+				foreach ($item->categories as $category) {
+					if (!is_int($category->slug)) {
+						$category->id = get_term_by('slug', $category->slug, 'product_cat')->term_id ?? 'uncategorized';
+					}
 				}
 			}
 
-			foreach ($item->tags as $tag) { // match category slug to id
-				if (!is_int($tag->slug)) {
-					$tag->id = get_term_by('slug', $tag->slug, 'product_tag')->term_id ?? 'uncategorized';
+			if (isset($item->tags) && $item->tags != null) {
+				foreach ($item->tags as $tag) {
+					if (!is_int($tag->slug)) {
+						$tag->id = get_term_by('slug', $tag->slug, 'product_tag')->term_id ?? 'uncategorized';
+					}
 				}
 			}
 
-			foreach ($item->attributes as $attribute) {
-				$attribute->id = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
+			if (isset($item->attributes) && $item->attributes != null) {
+				foreach ($item->attributes as $attribute) {
+					$attributeLookup = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
+					if ($attributeLookup['result'] == 'error') {
+						$response->status = 'error';
+						$response->message = "Attribute {$attributeLookup['slug']} not found";
+					} else {
+						$attribute->id = $attributeLookup['id'];
+					}
+				}
 			}
 			// how to match images
+			if ($response->status != 'error') {
+				try {
+					if ($productId != 0 || $productId != null) {
+						$response = $api->put($endpoint . $productId, $item);
+						$response->status = 'success';
+						$response->action = 'modify product';
+					} else {
+						$response = $api->post($endpoint, $item);
+						$response->status = 'success';
+						$response->action = 'create product';
+					}
+				} catch (\Throwable $th) {
+					$response->status = 'error';
+					$response->message = $th->getMessage();
+				}
+			}
 
-			if ($productId != null) {
-				$api->put($endpoint . $productId, $item);
+			if ($response->status == 'success') {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'action' => $response->action,
+					'id' => $response->id,
+					'product' => $item->name
+				));
 			} else {
-				$api->post($endpoint, $item);
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'message' => $response->message,
+					'product' => $item->name
+				));
 			}
 		}
+
+		wp_send_json($mainResponse, 200);
 	}
 
 	/**
@@ -742,7 +784,8 @@ class PpuAdmin
 	private function getAttributeIdBySlug($slug, $attributeArray)
 	{
 		$foundArrayKey = (array_search('pa_' . $slug, array_column($attributeArray, 'slug')));
-		return $attributeArray[$foundArrayKey]->id;
+		if (gettype($foundArrayKey) == 'boolean' && !$foundArrayKey) return array('result' => 'error', 'slug' => $slug);
+		return array('result' => 'success', 'id' => $attributeArray[$foundArrayKey]->id);
 	}
 
 	/**
