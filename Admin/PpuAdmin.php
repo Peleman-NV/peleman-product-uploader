@@ -473,7 +473,7 @@ class PpuAdmin
 
 		switch ($data->type) {
 			case 'products':
-				$response = $this->handleProducts($items);
+				$this->handleProducts($items);
 				break;
 			case 'variations':
 				$response = $this->handleProductVariations($items);
@@ -493,6 +493,7 @@ class PpuAdmin
 			case 'images':
 				break;
 		}
+
 		wp_safe_redirect($_POST['_wp_http_referer']);
 	}
 
@@ -734,7 +735,6 @@ class PpuAdmin
 			}
 			$response = array();
 		}
-
 
 		wp_send_json($mainResponse, 200);
 	}
