@@ -493,14 +493,9 @@ class PpuAdmin
 			case 'images':
 				break;
 		}
-
+		// TODO fix the redirect
 		wp_safe_redirect($_POST['_wp_http_referer']);
 	}
-
-	/**
-	 * Register API routes
-	 */
-
 
 	/**
 	 * Create an API client to handle uploads
@@ -606,20 +601,48 @@ class PpuAdmin
 	{
 		$api = $this->apiClient();
 		$endpoint = 'products/categories/';
-		foreach ($dataArray as $item) {
+		$mainResponse = array();
 
+		foreach ($dataArray as $item) {
 			$categoryId = get_term_by('slug', $item->slug, 'product_cat')->term_id;
 			if (isset($item->image->name)) {
 				$imageId = $this->getImageIdByName($item->image->name);
 				$item->image->id = $imageId;
 			}
 
-			if ($categoryId != null) {
-				$api->put($endpoint . $categoryId, $item);
-			} else {
-				$api->post($endpoint, $item);
+			try {
+				if ($categoryId != null) {
+					$response = $api->put($endpoint . $categoryId, $item);
+					$response->status = 'success';
+					$response->action = 'modify category';
+				} else {
+					$response = $api->post($endpoint, $item);
+					$response->status = 'success';
+					$response->action = 'create category';
+				}
+			} catch (\Throwable $th) {
+				$response->status = 'error';
+				$response->message = $th->getMessage();
 			}
+
+			if ($response->status == 'success') {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'action' => $response->action,
+					'id' => $response->id,
+					'category' => $item->name
+				));
+			} else {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'message' => $response->message,
+					'category' => $item->name
+				));
+			}
+			$response = array();
 		}
+
+		wp_send_json($mainResponse, 200);
 	}
 
 	/**
@@ -744,6 +767,7 @@ class PpuAdmin
 	 */
 	private function handleAttributeTerms($dataArray)
 	{
+		$mainResponse = array();
 		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 
 		$currentAttributesArray = array();
@@ -776,17 +800,43 @@ class PpuAdmin
 
 			$api = $this->apiClient();
 
-			if (empty($tempArray)) {
-				// term slug not found
-				$endpoint = 'products/attributes/' . $attributeId . '/terms';
-				$api->post($endpoint, $item);
-			} else {
-				$tempArray = reset($tempArray);
-				// term slug found
-				$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $tempArray->termId;
-				$api->put($endpoint, $item);
+			try {
+				if (empty($tempArray)) {
+					// term slug not found
+					$endpoint = 'products/attributes/' . $attributeId . '/terms';
+					$response = $api->post($endpoint, $item);
+					$response->status = 'success';
+					$response->action = 'create attribute';
+				} else {
+					$tempArray = reset($tempArray);
+					// term slug found
+					$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $tempArray->termId;
+					$response = $api->put($endpoint, $item);
+					$response->status = 'success';
+					$response->action = 'modify attribute';
+				}
+			} catch (\Throwable $th) {
+				$response->status = 'error';
+				$response->message = $th->getMessage();
 			}
+			if ($response->status == 'success') {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'action' => $response->action,
+					'id' => $response->id,
+					'term' => $item->name
+				));
+			} else {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'message' => $response->message,
+					'term' => $item->name
+				));
+			}
+			$response = array();
 		}
+
+		wp_send_json($mainResponse, 200);
 	}
 
 	/**
