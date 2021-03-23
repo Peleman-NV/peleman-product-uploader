@@ -796,17 +796,70 @@ class PpuAdmin
 	{
 		$api = $this->apiClient();
 		$endpoint = 'products/tags/';
-		$currentTags = $this->getFormattedArrayOfExistingItems($endpoint, 'tags');
+		$mainResponse = array();
+
+		global $wpdb;
+
+		$sql = "SELECT wp_terms.term_id as tagId,
+			wp_terms.slug FROM devshop_peleman.wp_term_taxonomy 
+			inner JOIN devshop_peleman.wp_terms ON wp_term_taxonomy.term_id = devshop_peleman.wp_terms.term_id 
+			WHERE taxonomy LIKE 'product_tag';";
+		$currentTags = $wpdb->get_results($sql);
 
 		foreach ($dataArray as $item) {
-			if (in_array($item->slug, $currentTags['slugs'])) {
-				$foundArrayKey = (array_search($item->slug, array_column($currentTags['tags'], 'slug')));
-				$id = $currentTags['tags'][$foundArrayKey]->id;
-				$api->put($endpoint . $id, $item);
+			if (empty($currentTags)) {
+				try {
+					$response = $api->post($endpoint, $item);
+					$response->status = 'success';
+					$response->action = 'create tag';
+				} catch (\Throwable $th) {
+					$response->status = 'error';
+					$response->message = $th->getMessage();
+				}
 			} else {
-				$api->post($endpoint, $item);
+				if (array_search($item->slug, array_column($currentTags, 'slug'))) {
+					$foundArrayKey = (array_search($item->slug, array_column($currentTags, 'slug')));
+					$id = $currentTags[$foundArrayKey]->tagId;
+					try {
+						$response = $api->put($endpoint . $id, $item);
+						$response->status = 'success';
+						$response->action = 'modify tag';
+					} catch (\Throwable $th) {
+						$response->status = 'error';
+						$response->message = $th->getMessage();
+					}
+				} else {
+					try {
+						$response = $api->post($endpoint, $item);
+						$response->status = 'success';
+						$response->action = 'create tag';
+					} catch (\Throwable $th) {
+						$response->status = 'error';
+						$response->message = $th->getMessage();
+					}
+				}
 			}
+
+			if ($response->status == 'success') {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'action' => $response->action,
+					'id' => $response->id,
+					'tag_name' => $item->name,
+					'tag_slug' => $item->slug
+				));
+			} else {
+				array_push($mainResponse, array(
+					'status' => $response->status,
+					'message' => $response->message,
+					'tag_name' => $item->name,
+					'tag_slug' => $item->slug
+				));
+			}
+			$response = "";
 		}
+
+		wp_send_json($mainResponse, 200);
 	}
 
 	/**
@@ -837,7 +890,12 @@ class PpuAdmin
 			]
 		);
 
-		$currentArrayItems = $api->get($endpoint);
+		$currentArrayItems = $api->get($endpoint, array(
+			'per_page' => 100
+		));
+
+		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($currentArrayItems, true) . '</pre>');
+
 		$currentArrayItemsSlugs = array_map(function ($e) {
 			return $e->slug;
 		}, $currentArrayItems);
