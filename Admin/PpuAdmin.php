@@ -767,19 +767,21 @@ class PpuAdmin
 	 */
 	private function handleAttributeTerms($dataArray)
 	{
+		$api = $this->apiClient();
 		$mainResponse = array();
-		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 
+		// get all current attributes
+		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 		$currentAttributesArray = array();
 		foreach ($currentAttributes['attributes'] as $attributes) {
 			array_push($currentAttributesArray, array(
 				'attributeId' => $attributes->id,
-				'attributeSlug' => $attributes->slug
+				'attributeSlug' => str_replace('pa_', '', $attributes->slug)
 			));
 		}
 
+		// get all current terms
 		global $wpdb;
-
 		$sql = "SELECT REPLACE(wp_term_taxonomy.taxonomy, 'pa_', '') as attribute, wp_terms.term_id as termId,
 			wp_terms.slug FROM wordpresstest.wp_term_taxonomy 
 			inner JOIN wordpresstest.wp_terms ON wp_term_taxonomy.term_id = wordpresstest.wp_terms.term_id 
@@ -787,20 +789,21 @@ class PpuAdmin
 		$currentTerms = $wpdb->get_results($sql);
 
 		foreach ($dataArray as $item) {
+			// per upload item, if it exists, get the current term
 			$tempArray = array_filter($currentTerms, function ($currentTerm) use ($item) {
-				if ($currentTerm->slug == $item->slug) {
+				if ($currentTerm->slug == strtolower($item->slug)) {
 					return true;
 				} else {
 					return false;
 				}
 			});
 
-			$attributeArrayKey = array_search('pa_' . $item->attribute, array_column($currentAttributesArray, 'attributeSlug'));
+			// get the attribute ID
+			$attributeArrayKey = array_search($item->attribute, array_column($currentAttributesArray, 'attributeSlug'));
 			$attributeId = array_column($currentAttributesArray, 'attributeId')[$attributeArrayKey];
 
-			$api = $this->apiClient();
-
 			try {
+				// if the term doesn't exist, POST
 				if (empty($tempArray)) {
 					// term slug not found
 					$endpoint = 'products/attributes/' . $attributeId . '/terms';
@@ -808,8 +811,8 @@ class PpuAdmin
 					$response->status = 'success';
 					$response->action = 'create attribute';
 				} else {
+					// if the term exists, PUT
 					$tempArray = reset($tempArray);
-					// term slug found
 					$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $tempArray->termId;
 					$response = $api->put($endpoint, $item);
 					$response->status = 'success';
@@ -819,6 +822,7 @@ class PpuAdmin
 				$response->status = 'error';
 				$response->message = $th->getMessage();
 			}
+
 			if ($response->status == 'success') {
 				array_push($mainResponse, array(
 					'status' => $response->status,
@@ -943,8 +947,6 @@ class PpuAdmin
 		$currentArrayItems = $api->get($endpoint, array(
 			'per_page' => 100
 		));
-
-		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($currentArrayItems, true) . '</pre>');
 
 		$currentArrayItemsSlugs = array_map(function ($e) {
 			return $e->slug;
