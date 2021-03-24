@@ -4,6 +4,7 @@ namespace PelemanProductUploader\Admin;
 
 use Automattic\WooCommerce\Client;
 use WP_REST_Response;
+use WC_Product_Attribute;
 
 class PpuAdmin
 {
@@ -723,46 +724,55 @@ class PpuAdmin
 	 */
 	private function handleAttributes($dataArray)
 	{
+		$finalResponse = array();
+
 		$api = $this->apiClient();
 		$endpoint = 'products/attributes/';
-		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
-		$finalResponse = array();
+		$currentAttributes = wc_get_attribute_taxonomies();
+		$currentAttributesArray = array();
+		foreach ($currentAttributes as $attribute) {
+			$currentAttributesArray[$attribute->attribute_name] = array(
+				'id' => $attribute->attribute_id,
+				'slug' => $attribute->attribute_name,
+			);
+		}
 
 		foreach ($dataArray as $item) {
 			try {
-				if (in_array('pa_' . $item->slug, $currentAttributes['slugs'])) {
-					$id = $this->getAttributeIdBySlug($item->slug, $currentAttributes['attributes'])['id'];
-					$response = $api->put($endpoint . $id, $item);
-					$response->status = 'success';
-					$response->action = 'modify attribute';
+				if (key_exists($item->slug, $currentAttributesArray)) {
+					$response = $api->put($endpoint . $currentAttributesArray[$item->slug]['id'], $item);
+					$tempResponse['action'] = 'modify attribute';
 				} else {
 					$response = $api->post($endpoint, $item);
-					$response->status = 'success';
-					$response->action = 'create attribute';
+					$tempResponse['action'] = 'create attribute';
 				}
+				$tempResponse['status'] = 'success';
 			} catch (\Throwable $th) {
-				$response->status = 'error';
-				$response->message = $th->getMessage();
+				$tempResponse['status'] = 'error';
+				$tempResponse['message'] = $th->getMessage();
 			}
 
-			if ($response->status == 'success') {
+			if ($tempResponse['status'] == 'error') {
 				array_push($finalResponse, array(
-					'status' => $response->status,
-					'action' => $response->action,
-					'id' => $response->id,
-					'attribute' => $response->name
+					'status' => 'error',
+					'message' => $tempResponse['message'],
+					'attribute' => $item->name,
+					'slug' => $item->slug
 				));
 			} else {
 				array_push($finalResponse, array(
-					'status' => $response->status,
-					'message' => $response->message,
-					'attribute' => $response->name
+					'status' => 'success',
+					'action' => $tempResponse['action'],
+					'id' => $response->id,
+					'attribute' => $item->name,
+					'slug' => $item->slug
 				));
 			}
 			$response = array();
 		}
 
-		wp_send_json($finalResponse, 200);
+		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
+		wp_send_json($finalResponse, $statusCode);
 	}
 
 	/**
@@ -770,134 +780,94 @@ class PpuAdmin
 	 */
 	private function handleAttributeTerms($dataArray)
 	{
-		$api = $this->apiClient();
 		$finalResponse = array();
 
-		// get all current attributes
-		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
+		// get current attributes
+		$currentAttributes = wc_get_attribute_taxonomies();
 		$currentAttributesArray = array();
-		foreach ($currentAttributes['attributes'] as $attributes) {
-			array_push($currentAttributesArray, array(
-				'attributeId' => $attributes->id,
-				'attributeSlug' => str_replace('pa_', '', $attributes->slug)
-			));
+		foreach ($currentAttributes as $attribute) {
+			$currentAttributesArray['pa_' . $attribute->attribute_name] = array(
+				'id' => $attribute->attribute_id,
+				'slug' => $attribute->attribute_name,
+			);
 		}
 
-		// get all current terms
-		global $wpdb;
-		$sql = "SELECT REPLACE(wp_term_taxonomy.taxonomy, 'pa_', '') as attribute, wp_terms.term_id as termId,
-			wp_terms.slug FROM wordpresstest.wp_term_taxonomy 
-			inner JOIN wordpresstest.wp_terms ON wp_term_taxonomy.term_id = wordpresstest.wp_terms.term_id 
-			WHERE taxonomy LIKE 'pa_%';";
-		$currentTerms = $wpdb->get_results($sql);
+		// get all terms per attribute
+		$newCurrentTerms = array();
+		foreach ($currentAttributesArray as $attrKey => $attrValue) {
+			$attributeTerms = get_terms(
+				array(
+					'taxonomy' => $attrKey,
+					'hide_empty' => false
+				)
+			);
 
-		foreach ($dataArray as $item) {
-			// per upload item, if it exists, get the current term
-			$tempArray = array_filter($currentTerms, function ($currentTerm) use ($item) {
-				if ($currentTerm->slug == strtolower($item->slug)) {
-					return true;
-				} else {
-					return false;
-				}
-			});
+			if (empty($attributeTerms)) continue;
 
-			// get the attribute ID
-			$attributeArrayKey = array_search($item->attribute, array_column($currentAttributesArray, 'attributeSlug'));
-			$attributeId = array_column($currentAttributesArray, 'attributeId')[$attributeArrayKey];
-
-			try {
-				// if the term doesn't exist, POST
-				if (empty($tempArray)) {
-					// term slug not found
-					$endpoint = 'products/attributes/' . $attributeId . '/terms';
-					$response = $api->post($endpoint, $item);
-					$response->status = 'success';
-					$response->action = 'create attribute';
-				} else {
-					// if the term exists, PUT
-					$tempArray = reset($tempArray);
-					$endpoint = 'products/attributes/' . $attributeId . '/terms/' . $tempArray->termId;
-					$response = $api->put($endpoint, $item);
-					$response->status = 'success';
-					$response->action = 'modify attribute';
-				}
-			} catch (\Throwable $th) {
-				$response->status = 'error';
-				$response->message = $th->getMessage();
+			$tempArray = array();
+			foreach ($attributeTerms as $term) {
+				$tempArray[$term->slug] = array(
+					'attributeId' => $attrValue['id'],
+					'attributeSlug' => $attrKey,
+					'id' => $term->term_id,
+				);
 			}
-
-			if ($response->status == 'success') {
-				array_push($finalResponse, array(
-					'status' => $response->status,
-					'action' => $response->action,
-					'id' => $response->id,
-					'term' => $item->name
-				));
-			} else {
-				array_push($finalResponse, array(
-					'status' => $response->status,
-					'message' => $response->message,
-					'term' => $item->name
-				));
-			}
-			$response = array();
+			$newCurrentTerms[$attrKey] = $tempArray;
 		}
 
-		wp_send_json($finalResponse, 200);
-	}
-
-	/**
-	 * Upload handler: tags
-	 */
-	private function handleTags($dataArray)
-	{
-		$finalResponse = array();
-
+		$api = $this->apiClient();
 		foreach ($dataArray as $item) {
-
 			try {
-				if (get_term_by('slug', $item->slug, 'product_tag')) {
-					$tag = get_term_by('slug', $item->slug, 'product_tag');
-					$response = wp_update_term($tag->term_id, 'product_tag', array(
-						'description' => $tag->description,
-						'slug'    => $tag->slug
-					));
-					$tempResponse['action'] = 'modify tag';
-				} else {
-					$response = wp_insert_term($item->name, 'product_tag', array(
-						'description' => $item->description,
-						'slug'    => $item->slug
-					));
-					$tempResponse['action'] = 'create tag';
+				$attrName = 'pa_' . $item->attribute;
+
+				if (key_exists($attrName, $newCurrentTerms)) {
+					// get id of attribute, regardless of whether the term is found
+					$foundTerm = $newCurrentTerms[$attrName][array_keys($newCurrentTerms[$attrName])[0]];
+					$attrId = $foundTerm['attributeId'];
+					if (key_exists(strtolower($item->slug), $newCurrentTerms[$attrName])) {
+						// term exists
+						$termId = $newCurrentTerms[$attrName][strtolower($item->slug)]['id'];
+						$endpoint = 'products/attributes/' . $attrId . '/terms/' . $termId;
+						$response = $api->put($endpoint, $item);
+						$tempResponse['action'] = 'modify term';
+					} else {
+						// term doesn't exist
+						$endpoint = 'products/attributes/' . $attrId . '/terms';
+						$response = $api->post($endpoint, $item);
+						$tempResponse['action'] = 'create term';
+					}
 				}
+				$tempResponse['status'] = 'success';
 			} catch (\Throwable $th) {
 				$tempResponse['status'] = 'error';
 				$tempResponse['message'] = $th->getMessage();
 			}
 
-			if (is_wp_error($response)) {
+			if ($tempResponse['status'] == 'error') {
 				array_push($finalResponse, array(
 					'status' => 'error',
-					'message' => $tempResponse['message'] ?? $response->errors,
-					'category' => $item->name
+					'message' => $tempResponse['message'],
+					'term' => $item->name,
+					'slug' => $item->slug
 				));
 			} else {
 				array_push($finalResponse, array(
 					'status' => 'success',
 					'action' => $tempResponse['action'],
-					'id' => $response['term_id'],
-					'category' => $item->name
+					'id' => $response->id,
+					'term' => $item->name,
+					'slug' => $item->slug
 				));
 			}
 			$response = array();
 		}
-		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 
+		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 		wp_send_json($finalResponse, $statusCode);
 	}
 
 	/**
-	 * Facilitaties linking images to categories, products, etc
+	 * Facilitates linking images to categories, products, etc
 	 */
 	private function getImageIdByName($imageName)
 	{
