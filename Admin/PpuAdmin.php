@@ -270,7 +270,7 @@ class PpuAdmin
 	public function postTags($request)
 	{
 		$items = json_decode($request->get_body())->items;
-		$this->handleTags($items);
+		$this->handleCategoriesAndTags($items, 'tag', 'tag');
 	}
 
 	/**	
@@ -288,7 +288,7 @@ class PpuAdmin
 	public function postCategories($request)
 	{
 		$items = json_decode($request->get_body())->items;
-		$this->handleCategories($items);
+		$this->handleCategoriesAndTags($items, 'cat', 'category');
 	}
 
 	/**	
@@ -479,7 +479,7 @@ class PpuAdmin
 				$response = $this->handleProductVariations($items);
 				break;
 			case 'categories':
-				$response = $this->handleCategories($items);
+				$response = $this->handleCategoriesAndTags($items, 'cat', 'category');
 				break;
 			case 'attributes':
 				$response = $this->handleAttributes($items);
@@ -488,7 +488,7 @@ class PpuAdmin
 				$response = $this->handleAttributeTerms($items);
 				break;
 			case 'tags':
-				$response = $this->handleTags($items);
+				$response = $this->handleCategoriesAndTags($items, 'tag', 'tag');
 				break;
 			case 'images':
 				break;
@@ -522,7 +522,7 @@ class PpuAdmin
 		$api = $this->apiClient();
 		$endpoint = 'products/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
-		$mainResponse = array();
+		$finalResponse = array();
 
 		foreach ($dataArray as $item) {
 			$response->status = 'success';
@@ -575,14 +575,14 @@ class PpuAdmin
 			}
 
 			if ($response->status == 'success') {
-				array_push($mainResponse, array(
+				array_push($finalResponse, array(
 					'status' => $response->status,
 					'action' => $response->action,
 					'id' => $response->id,
 					'product' => $item->name
 				));
 			} else {
-				array_push($mainResponse, array(
+				array_push($finalResponse, array(
 					'status' => $response->status,
 					'message' => $response->message,
 					'product' => $item->name
@@ -591,58 +591,61 @@ class PpuAdmin
 			$response = array();
 		}
 
-		wp_send_json($mainResponse, 200);
+		wp_send_json($finalResponse, 200);
 	}
 
 	/**
 	 * Upload handler: categories
 	 */
-	private function handleCategories($dataArray)
+	private function handleCategoriesAndTags($dataArray, $shortObjectName, $longObjectName)
 	{
-		$api = $this->apiClient();
-		$endpoint = 'products/categories/';
-		$mainResponse = array();
+		$finalResponse = array();
 
 		foreach ($dataArray as $item) {
-			$categoryId = get_term_by('slug', $item->slug, 'product_cat')->term_id;
-			if (isset($item->image->name)) {
-				$imageId = $this->getImageIdByName($item->image->name);
-				$item->image->id = $imageId;
-			}
+			// if (isset($item->image->name)) { // match images
+			// 	$imageId = $this->getImageIdByName($item->image->name);
+			// 	$item->image->id = $imageId;
+			// }
 
 			try {
-				if ($categoryId != null) {
-					$response = $api->put($endpoint . $categoryId, $item);
-					$response->status = 'success';
-					$response->action = 'modify category';
+				if (get_term_by('slug', $item->slug, 'product_' . $shortObjectName)) {
+					$object = get_term_by('slug', $item->slug, 'product_' . $shortObjectName);
+					$response = wp_update_term($object->term_id, 'product_' . $shortObjectName, array(
+						'description' => $item->description,
+						'slug'    => $item->slug
+					));
+					$tempResponse['action'] = 'modify ' . $longObjectName;
 				} else {
-					$response = $api->post($endpoint, $item);
-					$response->status = 'success';
-					$response->action = 'create category';
+					$response = wp_insert_term($item->name, 'product_' . $shortObjectName, array(
+						'description' => $item->description,
+						'slug'    => $item->slug
+					));
+					$tempResponse['action'] = 'create ' . $longObjectName;
 				}
 			} catch (\Throwable $th) {
-				$response->status = 'error';
-				$response->message = $th->getMessage();
+				$tempResponse['status'] = 'error';
+				$tempResponse['message'] = $th->getMessage();
 			}
 
-			if ($response->status == 'success') {
-				array_push($mainResponse, array(
-					'status' => $response->status,
-					'action' => $response->action,
-					'id' => $response->id,
-					'category' => $item->name
+			if (is_wp_error($response)) {
+				array_push($finalResponse, array(
+					'status' => 'error',
+					'message' => $tempResponse['message'] ?? $response->errors,
+					$longObjectName => $item->name
 				));
 			} else {
-				array_push($mainResponse, array(
-					'status' => $response->status,
-					'message' => $response->message,
-					'category' => $item->name
+				array_push($finalResponse, array(
+					'status' => 'success',
+					'action' => $tempResponse['action'],
+					'id' => $response['term_id'],
+					$longObjectName => $item->name
 				));
 			}
 			$response = array();
 		}
+		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 
-		wp_send_json($mainResponse, 200);
+		wp_send_json($finalResponse, $statusCode);
 	}
 
 	/**
@@ -653,7 +656,7 @@ class PpuAdmin
 		$api = $this->apiClient();
 		$endpoint = 'products/attributes/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
-		$mainResponse = array();
+		$finalResponse = array();
 
 		// Products loop
 		foreach ($dataArray as $item) {
@@ -695,14 +698,14 @@ class PpuAdmin
 					}
 				}
 				if ($response->status == 'success') {
-					array_push($mainResponse, array(
+					array_push($finalResponse, array(
 						'status' => $response->status,
 						'action' => $response->action,
 						'id' => $response->id,
 						'product' => $variation->sku
 					));
 				} else {
-					array_push($mainResponse, array(
+					array_push($finalResponse, array(
 						'status' => $response->status,
 						'message' => $response->message,
 						'product' => $variation->sku
@@ -712,7 +715,7 @@ class PpuAdmin
 			}
 		}
 
-		wp_send_json($mainResponse, 200);
+		wp_send_json($finalResponse, 200);
 	}
 
 	/**
@@ -723,7 +726,7 @@ class PpuAdmin
 		$api = $this->apiClient();
 		$endpoint = 'products/attributes/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
-		$mainResponse = array();
+		$finalResponse = array();
 
 		foreach ($dataArray as $item) {
 			try {
@@ -743,14 +746,14 @@ class PpuAdmin
 			}
 
 			if ($response->status == 'success') {
-				array_push($mainResponse, array(
+				array_push($finalResponse, array(
 					'status' => $response->status,
 					'action' => $response->action,
 					'id' => $response->id,
 					'attribute' => $response->name
 				));
 			} else {
-				array_push($mainResponse, array(
+				array_push($finalResponse, array(
 					'status' => $response->status,
 					'message' => $response->message,
 					'attribute' => $response->name
@@ -759,7 +762,7 @@ class PpuAdmin
 			$response = array();
 		}
 
-		wp_send_json($mainResponse, 200);
+		wp_send_json($finalResponse, 200);
 	}
 
 	/**
@@ -768,7 +771,7 @@ class PpuAdmin
 	private function handleAttributeTerms($dataArray)
 	{
 		$api = $this->apiClient();
-		$mainResponse = array();
+		$finalResponse = array();
 
 		// get all current attributes
 		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
@@ -824,14 +827,14 @@ class PpuAdmin
 			}
 
 			if ($response->status == 'success') {
-				array_push($mainResponse, array(
+				array_push($finalResponse, array(
 					'status' => $response->status,
 					'action' => $response->action,
 					'id' => $response->id,
 					'term' => $item->name
 				));
 			} else {
-				array_push($mainResponse, array(
+				array_push($finalResponse, array(
 					'status' => $response->status,
 					'message' => $response->message,
 					'term' => $item->name
@@ -840,7 +843,7 @@ class PpuAdmin
 			$response = array();
 		}
 
-		wp_send_json($mainResponse, 200);
+		wp_send_json($finalResponse, 200);
 	}
 
 	/**
@@ -848,72 +851,49 @@ class PpuAdmin
 	 */
 	private function handleTags($dataArray)
 	{
-		$api = $this->apiClient();
-		$endpoint = 'products/tags/';
-		$mainResponse = array();
-
-		global $wpdb;
-
-		$sql = "SELECT wp_terms.term_id as tagId,
-			wp_terms.slug FROM devshop_peleman.wp_term_taxonomy 
-			inner JOIN devshop_peleman.wp_terms ON wp_term_taxonomy.term_id = devshop_peleman.wp_terms.term_id 
-			WHERE taxonomy LIKE 'product_tag';";
-		$currentTags = $wpdb->get_results($sql);
+		$finalResponse = array();
 
 		foreach ($dataArray as $item) {
-			if (empty($currentTags)) {
-				try {
-					$response = $api->post($endpoint, $item);
-					$response->status = 'success';
-					$response->action = 'create tag';
-				} catch (\Throwable $th) {
-					$response->status = 'error';
-					$response->message = $th->getMessage();
-				}
-			} else {
-				if (array_search($item->slug, array_column($currentTags, 'slug'))) {
-					$foundArrayKey = (array_search($item->slug, array_column($currentTags, 'slug')));
-					$id = $currentTags[$foundArrayKey]->tagId;
-					try {
-						$response = $api->put($endpoint . $id, $item);
-						$response->status = 'success';
-						$response->action = 'modify tag';
-					} catch (\Throwable $th) {
-						$response->status = 'error';
-						$response->message = $th->getMessage();
-					}
+
+			try {
+				if (get_term_by('slug', $item->slug, 'product_tag')) {
+					$tag = get_term_by('slug', $item->slug, 'product_tag');
+					$response = wp_update_term($tag->term_id, 'product_tag', array(
+						'description' => $tag->description,
+						'slug'    => $tag->slug
+					));
+					$tempResponse['action'] = 'modify tag';
 				} else {
-					try {
-						$response = $api->post($endpoint, $item);
-						$response->status = 'success';
-						$response->action = 'create tag';
-					} catch (\Throwable $th) {
-						$response->status = 'error';
-						$response->message = $th->getMessage();
-					}
+					$response = wp_insert_term($item->name, 'product_tag', array(
+						'description' => $item->description,
+						'slug'    => $item->slug
+					));
+					$tempResponse['action'] = 'create tag';
 				}
+			} catch (\Throwable $th) {
+				$tempResponse['status'] = 'error';
+				$tempResponse['message'] = $th->getMessage();
 			}
 
-			if ($response->status == 'success') {
-				array_push($mainResponse, array(
-					'status' => $response->status,
-					'action' => $response->action,
-					'id' => $response->id,
-					'tag_name' => $item->name,
-					'tag_slug' => $item->slug
+			if (is_wp_error($response)) {
+				array_push($finalResponse, array(
+					'status' => 'error',
+					'message' => $tempResponse['message'] ?? $response->errors,
+					'category' => $item->name
 				));
 			} else {
-				array_push($mainResponse, array(
-					'status' => $response->status,
-					'message' => $response->message,
-					'tag_name' => $item->name,
-					'tag_slug' => $item->slug
+				array_push($finalResponse, array(
+					'status' => 'success',
+					'action' => $tempResponse['action'],
+					'id' => $response['term_id'],
+					'category' => $item->name
 				));
 			}
-			$response = "";
+			$response = array();
 		}
+		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 
-		wp_send_json($mainResponse, 200);
+		wp_send_json($finalResponse, $statusCode);
 	}
 
 	/**
