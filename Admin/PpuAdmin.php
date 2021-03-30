@@ -818,8 +818,7 @@ class PpuAdmin
 		$api = $this->apiClient();
 		foreach ($dataArray as $item) {
 			try {
-				$attrName = 'pa_' . $item->attribute;
-
+				$attrName = 'pa_' . strtolower($item->attribute);
 				if (key_exists($attrName, $newCurrentTerms)) {
 					// get id of attribute, regardless of whether the term is found
 					$foundTerm = $newCurrentTerms[$attrName][array_keys($newCurrentTerms[$attrName])[0]];
@@ -861,7 +860,6 @@ class PpuAdmin
 			}
 			$response = array();
 		}
-
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 		wp_send_json($finalResponse, $statusCode);
 	}
