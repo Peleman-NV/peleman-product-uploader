@@ -835,8 +835,12 @@ class PpuAdmin
 						$response = $api->post($endpoint, $item);
 						$tempResponse['action'] = 'create term';
 					}
+					$tempResponse['status'] = 'success';
+					$tempResponse['id'] = $response->id;
+				} else {
+					$tempResponse['status'] = 'error';
+					$tempResponse['message'] = "attribute not found";
 				}
-				$tempResponse['status'] = 'success';
 			} catch (\Throwable $th) {
 				$tempResponse['status'] = 'error';
 				$tempResponse['message'] = $th->getMessage();
@@ -846,14 +850,16 @@ class PpuAdmin
 				array_push($finalResponse, array(
 					'status' => 'error',
 					'message' => $tempResponse['message'],
+					'attribute' => $item->attribute,
 					'term' => $item->name,
 					'slug' => $item->slug
 				));
-			} else {
+			} else if ($tempResponse['status'] == 'success') {
 				array_push($finalResponse, array(
 					'status' => 'success',
 					'action' => $tempResponse['action'],
-					'id' => $response->id,
+					'id' => $tempResponse['id'],
+					'attribute' => $item->attribute,
 					'term' => $item->name,
 					'slug' => $item->slug
 				));
