@@ -460,6 +460,65 @@ class PpuAdmin
 		return $slug;
 	}
 
+	/**	
+	 * Register post image endpoint
+	 */
+	public function registerPostImageEndpoint()
+	{
+		register_rest_route('ppu/v1', '/image', array(
+			'methods' => 'POST',
+			'callback' => array($this, 'postImage'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function postImage($request)
+	{
+		$data = json_decode($request->get_body());
+		$filename = $data->name;
+		$base64ImageString = $data->base64image;
+
+		$upload_dir  = wp_upload_dir();
+		$upload_path = str_replace('/', DIRECTORY_SEPARATOR, $upload_dir['path']) . DIRECTORY_SEPARATOR;
+
+		$img             = str_replace('data:image/jpeg;base64,', '', $base64ImageString);
+		$img             = str_replace(' ', '+', $img);
+		$decoded         = base64_decode($img);
+		$file_type       = 'image/jpeg';
+
+		file_put_contents($upload_path . $filename, $decoded);
+
+		$attachment = array(
+			'post_mime_type' => $file_type,
+			'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
+			'post_content'   => '',
+			'post_status'    => 'inherit',
+			'guid'           => $upload_dir['url'] . '/' . basename($filename)
+		);
+
+		try {
+			$attach_id = wp_insert_attachment($attachment, $upload_dir['path'] . '/' . $filename);
+			require_once(ABSPATH . 'wp-admin/includes/image.php');
+			$attach_data = wp_generate_attachment_metadata($attach_id, $upload_path . $filename);
+
+			if (wp_update_attachment_metadata($attach_id, $attach_data)) {
+				$response['status'] = 'success';
+				$response['id'] = $attach_id;
+				$response['image_path'] = get_post_meta($attach_id, '_wp_attached_file', true);
+				wp_send_json($response, 200);
+				return;
+			}
+		} catch (\Throwable $th) {
+			$response['status'] = 'error';
+			$response['message'] = $th->getMessage();
+		}
+		$response['status'] = 'error';
+		$response['message'] = "image upload failed";
+
+		wp_send_json($response, 400);
+		return;
+	}
+
 	/**
 	 * Process products JSON
 	 */
