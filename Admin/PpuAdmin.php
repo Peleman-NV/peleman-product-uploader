@@ -861,10 +861,10 @@ class PpuAdmin
 		foreach ($dataArray as $item) {
 			try {
 				if (key_exists($item->slug, $currentAttributesArray)) {
-					$response = $api->put($endpoint . $currentAttributesArray[$item->slug]['id'], $item);
+					$response = (array) $api->put($endpoint . $currentAttributesArray[$item->slug]['id'], $item);
 					$tempResponse['action'] = 'modify attribute';
 				} else {
-					$response = $api->post($endpoint, $item);
+					$response = (array) $api->post($endpoint, $item);
 					$tempResponse['action'] = 'create attribute';
 				}
 				$tempResponse['status'] = 'success';
@@ -884,7 +884,7 @@ class PpuAdmin
 				array_push($finalResponse, array(
 					'status' => 'success',
 					'action' => $tempResponse['action'],
-					'id' => $response->id,
+					'id' => $response['id'],
 					'attribute' => $item->name,
 					'slug' => $item->slug
 				));
@@ -948,16 +948,16 @@ class PpuAdmin
 						// term exists
 						$termId = $newCurrentTerms[$attrName][strtolower($item->slug)]['id'];
 						$endpoint = 'products/attributes/' . $attrId . '/terms/' . $termId;
-						$response = $api->put($endpoint, $item);
+						$response = (array) $api->put($endpoint, $item);
 						$tempResponse['action'] = 'modify term';
 					} else {
 						// term doesn't exist
 						$endpoint = 'products/attributes/' . $attrId . '/terms';
-						$response = $api->post($endpoint, $item);
+						$response = (array) $api->post($endpoint, $item);
 						$tempResponse['action'] = 'create term';
 					}
 					$tempResponse['status'] = 'success';
-					$tempResponse['id'] = $response->id;
+					$tempResponse['id'] = $response['id'];
 				} else {
 					$tempResponse['status'] = 'error';
 					$tempResponse['message'] = "attribute not found";
