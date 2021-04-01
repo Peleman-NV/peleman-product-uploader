@@ -474,10 +474,10 @@ class PpuAdmin
 
 	public function postImage($request)
 	{
-		$images = json_decode($request->get_body());
+		$data = json_decode($request->get_body());
 		$finalResponse = array();
 
-		foreach ($images as $image) {
+		foreach ($data->images as $image) {
 			$filename = $image->name;
 			$altText = $image->alt;
 			$contentText = $image->content;
