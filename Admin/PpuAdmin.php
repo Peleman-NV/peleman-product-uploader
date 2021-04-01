@@ -476,6 +476,9 @@ class PpuAdmin
 	{
 		$data = json_decode($request->get_body());
 		$filename = $data->name;
+		$altText = $data->alt;
+		$contentText = $data->content;
+		$excerptText = $data->description;
 		$base64ImageString = $data->base64image;
 
 		$upload_dir  = wp_upload_dir();
@@ -488,23 +491,41 @@ class PpuAdmin
 
 		file_put_contents($upload_path . $filename, $decoded);
 
-		$attachment = array(
-			'post_mime_type' => $file_type,
-			'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
-			'post_content'   => '',
-			'post_status'    => 'inherit',
-			'guid'           => $upload_dir['url'] . '/' . basename($filename)
-		);
+		$imageExists = $this->getImageIdByName($filename);
+		if ($imageExists != null) {
+			$response['message'] = "Updated existing image";
+			$attachment = array(
+				'ID' => $imageExists,
+				'post_mime_type' => $file_type,
+				'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
+				'post_content'   => $contentText,
+				'post_excerpt'   => $excerptText,
+				'post_status'    => 'inherit',
+				'guid'           => $upload_dir['url'] . '/' . basename($filename)
+			);
+		} else {
+			$response['message'] = "Created new image";
+			$attachment = array(
+				$file_type,
+				'post_mime_type' => $file_type,
+				'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
+				'post_content'   => $contentText,
+				'post_excerpt'   => $excerptText,
+				'post_status'    => 'inherit',
+				'guid'           => $upload_dir['url'] . '/' . basename($filename)
+			);
+		}
 
 		try {
-			$attach_id = wp_insert_attachment($attachment, $upload_dir['path'] . '/' . $filename);
+			$attachment_id = wp_insert_attachment($attachment, $upload_dir['path'] . '/' . $filename);
 			require_once(ABSPATH . 'wp-admin/includes/image.php');
-			$attach_data = wp_generate_attachment_metadata($attach_id, $upload_path . $filename);
+			$attach_data = wp_generate_attachment_metadata($attachment_id, $upload_path . $filename);
+			update_post_meta($attachment_id, '_wp_attachment_image_alt', $altText);
 
-			if (wp_update_attachment_metadata($attach_id, $attach_data)) {
+			if (wp_update_attachment_metadata($attachment_id, $attach_data)) {
 				$response['status'] = 'success';
-				$response['id'] = $attach_id;
-				$response['image_path'] = get_post_meta($attach_id, '_wp_attached_file', true);
+				$response['id'] = $attachment_id;
+				$response['image_path'] = get_post_meta($attachment_id, '_wp_attached_file', true);
 				wp_send_json($response, 200);
 				return;
 			}
