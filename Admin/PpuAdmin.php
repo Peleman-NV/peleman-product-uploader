@@ -770,7 +770,6 @@ class PpuAdmin
 
 		// Products loop
 		foreach ($dataArray as $item) {
-			$response->status = 'success';
 			$productId = wc_get_product_id_by_sku($item->parent_product_sku);
 			$endpoint = 'products/' . $productId . '/variations/';
 
@@ -783,49 +782,61 @@ class PpuAdmin
 					foreach ($variation->attributes as $variationAttribute) {
 						$attributeLookup = $this->getAttributeIdBySlug($variationAttribute->slug, $currentAttributes['attributes']);
 						if ($attributeLookup['result'] == 'error') {
-							$response->status = 'error';
-							$response->message = "Attribute {$attributeLookup['slug']} not found";
+							$response['status'] = 'error';
+							$response['message'] = "Attribute {$attributeLookup['slug']} not found";
 						} else {
 							$variationAttribute->id = $attributeLookup['id'];
 						}
 					}
 				}
 
-				if ($response->status != 'error') {
-					try {
-						if ($variationId != 0 || $variationId != null) {
-							$response = $api->put($endpoint . $variationId, $variation);
-							$response->status = 'success';
-							$response->action = 'modify variation';
-						} else {
-							$response = $api->post($endpoint, $variation);
-							$response->status = 'success';
-							$response->action = 'create variation';
-						}
-					} catch (\Throwable $th) {
-						$response->status = 'error';
-						$response->message = $th->getMessage();
+				if (isset($variation->image) && $variation->image != null) {
+
+					$imageId = $this->getImageIdByName($variation->image->name);
+					if ($imageId) {
+						$variation->image->id = $imageId;
+					} else {
+						$response['status'] = 'error';
+						$response['message'] = "Image {$variation->image->name} not found";
 					}
 				}
-				if ($response->status == 'success') {
+
+				if (!isset($response['status'])) {
+					try {
+						if ($variationId != 0 || $variationId != null) {
+							$response = (array) $api->put($endpoint . $variationId, $variation);
+							$response['status'] = 'success';
+							$response['action'] = 'modify variation';
+						} else {
+							$response = (array) $api->post($endpoint, $variation);
+							$response['status'] = 'success';
+							$response['action'] = 'create variation';
+						}
+					} catch (\Throwable $th) {
+						$response['status'] = 'error';
+						$response['message'] = $th->getMessage();
+					}
+				}
+				if ($response['status'] == 'success') {
 					array_push($finalResponse, array(
-						'status' => $response->status,
-						'action' => $response->action,
-						'id' => $response->id,
+						'status' => $response['status'],
+						'action' => $response['action'],
+						'id' => $response['id'],
 						'product' => $variation->sku
 					));
 				} else {
 					array_push($finalResponse, array(
-						'status' => $response->status,
-						'message' => $response->message,
+						'status' => $response['status'],
+						'message' => $response['message'],
 						'product' => $variation->sku
 					));
 				}
 				$response = array();
 			}
 		}
+		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 
-		wp_send_json($finalResponse, 200);
+		wp_send_json($finalResponse, $statusCode);
 	}
 
 	/**
