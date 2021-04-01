@@ -545,15 +545,16 @@ class PpuAdmin
 				));
 			} else {
 				array_push($finalResponse, array(
-					'status' => $response['status'],
+					'status' => 'error',
 					'image_name' => $image->name,
 					'message' => "image upload failed"
 				));
 			}
 			$response = array();
 		}
+		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 
-		wp_send_json($finalResponse, 400);
+		wp_send_json($finalResponse, $statusCode);
 		return;
 	}
 
