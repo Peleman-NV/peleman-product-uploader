@@ -495,7 +495,7 @@ class PpuAdmin
 			file_put_contents($upload_path . $filename, $decoded);
 
 			$imageExists = $this->getImageIdByName($filename);
-			if ($imageExists != null) {
+			if ($imageExists) {
 				$response['message'] = "Updated existing image";
 				$attachment = array(
 					'ID' => $imageExists,
@@ -621,9 +621,9 @@ class PpuAdmin
 		$endpoint = 'products/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 		$finalResponse = array();
+		$response = array();
 
 		foreach ($dataArray as $item) {
-			$response->status = 'success';
 			// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
 			$productId = wc_get_product_id_by_sku($item->sku);
 
@@ -647,48 +647,60 @@ class PpuAdmin
 				foreach ($item->attributes as $attribute) {
 					$attributeLookup = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
 					if ($attributeLookup['result'] == 'error') {
-						$response->status = 'error';
-						$response->message = "Attribute {$attributeLookup['slug']} not found";
+						$response['status'] = 'error';
+						$response['message'] = "Attribute {$attributeLookup['slug']} not found";
 					} else {
 						$attribute->id = $attributeLookup['id'];
 					}
 				}
 			}
-			// how to match images
-			if ($response->status != 'error') {
-				try {
-					if ($productId != 0 || $productId != null) {
-						$response = $api->put($endpoint . $productId, $item);
-						$response->status = 'success';
-						$response->action = 'modify product';
+
+			if (isset($item->images) && $item->images != null) {
+				foreach ($item->images as $image) {
+					$imageId = $this->getImageIdByName($image->name);
+					if ($imageId != null) {
+						$image->id = $imageId;
 					} else {
-						$response = $api->post($endpoint, $item);
-						$response->status = 'success';
-						$response->action = 'create product';
+						$response['status'] = 'error';
+						$response['message'] = "Image {$image->name} not found";
 					}
-				} catch (\Throwable $th) {
-					$response->status = 'error';
-					$response->message = $th->getMessage();
 				}
 			}
 
-			if ($response->status == 'success') {
+			if (!isset($response['status'])) {
+				try {
+					if ($productId != 0 || $productId != null) {
+						$response = (array) $api->put($endpoint . $productId, $item);
+						$response['status'] = 'success';
+						$response['action'] = 'modify product';
+					} else {
+						$response = (array) $api->post($endpoint, $item);
+						$response['status'] = 'success';
+						$response['action'] = 'create product';
+					}
+				} catch (\Throwable $th) {
+					$response['status'] = 'error';
+					$response['message'] = $th->getMessage();
+				}
+			}
+
+			if (isset($response['status']) && $response['status'] == 'success') {
 				array_push($finalResponse, array(
-					'status' => $response->status,
-					'action' => $response->action,
-					'id' => $response->id,
+					'status' => $response['status'],
+					'action' => $response['action'],
+					'id' => $response['id'],
 					'product' => $item->name
 				));
 			} else {
 				array_push($finalResponse, array(
-					'status' => $response->status,
-					'message' => $response->message,
+					'status' => $response['status'],
+					'message' => $response['message'],
 					'product' => $item->name
 				));
 			}
+
 			$response = array();
 		}
-
 		wp_send_json($finalResponse, 200);
 	}
 
@@ -976,7 +988,10 @@ class PpuAdmin
 		$sql = "SELECT post_id FROM " . $wpdb->base_prefix . "postmeta WHERE meta_key = '_wp_attached_file' AND meta_value LIKE '%" . $imageName . "%';";
 		$result = $wpdb->get_results($sql);
 
-		return $result[0]->post_id;
+		if (!empty($result)) {
+			return $result[0]->post_id;
+		}
+		return false;
 	}
 
 	/**
