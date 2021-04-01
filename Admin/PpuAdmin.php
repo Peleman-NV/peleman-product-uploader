@@ -474,69 +474,86 @@ class PpuAdmin
 
 	public function postImage($request)
 	{
-		$data = json_decode($request->get_body());
-		$filename = $data->name;
-		$altText = $data->alt;
-		$contentText = $data->content;
-		$excerptText = $data->description;
-		$base64ImageString = $data->base64image;
+		$images = json_decode($request->get_body());
+		$finalResponse = array();
 
-		$upload_dir  = wp_upload_dir();
-		$upload_path = str_replace('/', DIRECTORY_SEPARATOR, $upload_dir['path']) . DIRECTORY_SEPARATOR;
+		foreach ($images as $image) {
+			$filename = $image->name;
+			$altText = $image->alt;
+			$contentText = $image->content;
+			$excerptText = $image->description;
+			$base64ImageString = $image->base64image;
 
-		$img             = str_replace('data:image/jpeg;base64,', '', $base64ImageString);
-		$img             = str_replace(' ', '+', $img);
-		$decoded         = base64_decode($img);
-		$file_type       = 'image/jpeg';
+			$upload_dir  = wp_upload_dir();
+			$upload_path = str_replace('/', DIRECTORY_SEPARATOR, $upload_dir['path']) . DIRECTORY_SEPARATOR;
 
-		file_put_contents($upload_path . $filename, $decoded);
+			$img             = str_replace('data:image/jpeg;base64,', '', $base64ImageString);
+			$img             = str_replace(' ', '+', $img);
+			$decoded         = base64_decode($img);
+			$file_type       = 'image/jpeg';
 
-		$imageExists = $this->getImageIdByName($filename);
-		if ($imageExists != null) {
-			$response['message'] = "Updated existing image";
-			$attachment = array(
-				'ID' => $imageExists,
-				'post_mime_type' => $file_type,
-				'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
-				'post_content'   => $contentText,
-				'post_excerpt'   => $excerptText,
-				'post_status'    => 'inherit',
-				'guid'           => $upload_dir['url'] . '/' . basename($filename)
-			);
-		} else {
-			$response['message'] = "Created new image";
-			$attachment = array(
-				$file_type,
-				'post_mime_type' => $file_type,
-				'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
-				'post_content'   => $contentText,
-				'post_excerpt'   => $excerptText,
-				'post_status'    => 'inherit',
-				'guid'           => $upload_dir['url'] . '/' . basename($filename)
-			);
-		}
+			file_put_contents($upload_path . $filename, $decoded);
 
-		try {
-			$attachment_id = wp_insert_attachment($attachment, $upload_dir['path'] . '/' . $filename);
-			require_once(ABSPATH . 'wp-admin/includes/image.php');
-			$attach_data = wp_generate_attachment_metadata($attachment_id, $upload_path . $filename);
-			update_post_meta($attachment_id, '_wp_attachment_image_alt', $altText);
-
-			if (wp_update_attachment_metadata($attachment_id, $attach_data)) {
-				$response['status'] = 'success';
-				$response['id'] = $attachment_id;
-				$response['image_path'] = get_post_meta($attachment_id, '_wp_attached_file', true);
-				wp_send_json($response, 200);
-				return;
+			$imageExists = $this->getImageIdByName($filename);
+			if ($imageExists != null) {
+				$response['message'] = "Updated existing image";
+				$attachment = array(
+					'ID' => $imageExists,
+					'post_mime_type' => $file_type,
+					'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
+					'post_content'   => $contentText,
+					'post_excerpt'   => $excerptText,
+					'post_status'    => 'inherit',
+					'guid'           => $upload_dir['url'] . '/' . basename($filename)
+				);
+			} else {
+				$response['message'] = "Created new image";
+				$attachment = array(
+					$file_type,
+					'post_mime_type' => $file_type,
+					'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
+					'post_content'   => $contentText,
+					'post_excerpt'   => $excerptText,
+					'post_status'    => 'inherit',
+					'guid'           => $upload_dir['url'] . '/' . basename($filename)
+				);
 			}
-		} catch (\Throwable $th) {
-			$response['status'] = 'error';
-			$response['message'] = $th->getMessage();
-		}
-		$response['status'] = 'error';
-		$response['message'] = "image upload failed";
 
-		wp_send_json($response, 400);
+			try {
+				$attachment_id = wp_insert_attachment($attachment, $upload_dir['path'] . '/' . $filename);
+				require_once(ABSPATH . 'wp-admin/includes/image.php');
+				$attach_data = wp_generate_attachment_metadata($attachment_id, $upload_path . $filename);
+				update_post_meta($attachment_id, '_wp_attachment_image_alt', $altText);
+
+				if (wp_update_attachment_metadata($attachment_id, $attach_data)) {
+					$response['status'] = 'success';
+					$response['id'] = $attachment_id;
+					$response['image_path'] = get_post_meta($attachment_id, '_wp_attached_file', true);
+				}
+			} catch (\Throwable $th) {
+				$response['status'] = 'error';
+				$response['message'] = $th->getMessage();
+			}
+
+			if ($response['status'] == 'success') {
+				array_push($finalResponse, array(
+					'status' => $response['status'],
+					'id' => $response['id'],
+					'image_name' => $image->name,
+					'image' => $response['image_path'],
+					'message' => $response['message'],
+				));
+			} else {
+				array_push($finalResponse, array(
+					'status' => $response['status'],
+					'image_name' => $image->name,
+					'message' => "image upload failed"
+				));
+			}
+			$response = array();
+		}
+
+		wp_send_json($finalResponse, 400);
 		return;
 	}
 
