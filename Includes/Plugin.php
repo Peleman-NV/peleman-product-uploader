@@ -101,6 +101,7 @@ class Plugin
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetProductsEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetTermsEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetVariationsEndpoint');
+		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetImagesEndpoint');
 
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostAttributesEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostCategoriesEndpoint');

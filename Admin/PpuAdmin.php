@@ -122,6 +122,54 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Register get images endpoint
+	 */
+	public function registerGetImagesEndpoint()
+	{
+		register_rest_route('ppu/v1', '/image(?:/(?P<image_name>\S+))?', array(
+			'methods' => 'GET',
+			'callback' => array($this, 'getImages'),
+			'args' => array('page'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function getImages($request)
+	{
+		if (!empty($request['image_name'])) {
+			$imageName = $request['image_name'];
+			if (!$this->getImageIdByName($imageName)) {
+				wp_send_json(array(
+					'message' => 'No image found.',
+					'name' => $imageName
+				));
+			} else {
+				$imageId = $this->getImageIdByName($imageName);
+				wp_send_json($this->getImageInformation($imageId));
+			}
+		}
+		global $wpdb;
+		$sql = "SELECT post_id FROM " . $wpdb->base_prefix . "postmeta WHERE meta_key = '_wp_attached_file'";
+		$result = $wpdb->get_results($sql);
+		$finalResult = array();
+		foreach ($result as $image) {
+			array_push($finalResult, $this->getImageInformation($image->post_id));
+		}
+		wp_send_json($finalResult);
+	}
+
+	private function getImageInformation($imageId)
+	{
+		$imageInformation = wp_get_attachment_metadata($imageId);
+
+		return array(
+			'id' => $imageId,
+			'url' => wp_get_attachment_url($imageId),
+			'size' => $imageInformation['width'] . 'x' . $imageInformation['height']
+		);
+	}
+
 	/**	
 	 * Register get categories endpoint
 	 */
@@ -992,7 +1040,7 @@ class PpuAdmin
 	private function getImageIdByName($imageName)
 	{
 		global $wpdb;
-		$sql = "SELECT post_id FROM " . $wpdb->base_prefix . "postmeta WHERE meta_key = '_wp_attached_file' AND meta_value LIKE '%" . $imageName . "%';";
+		$sql = "SELECT post_id FROM " . $wpdb->base_prefix . "postmeta WHERE meta_key = '_wp_attached_file' AND meta_value LIKE '%/" . $imageName . "';";
 		$result = $wpdb->get_results($sql);
 
 		if (!empty($result)) {
