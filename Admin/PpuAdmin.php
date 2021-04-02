@@ -167,7 +167,7 @@ class PpuAdmin
 			'id' => $imageId,
 			'url' => wp_get_attachment_url($imageId),
 			'size' => round(filesize(get_attached_file($imageId)) / 1024, 0) . 'KB',
-			'dimensions' => !(empty($imageInformation['width'] && !empty($imageInformation['height']))) ? $imageInformation['width'] . 'x' . $imageInformation['height'] : 'no sizes found'
+			'dimensions' => !(empty($imageInformation['width'] && !empty($imageInformation['height']))) ? $imageInformation['width'] . 'x' . $imageInformation['height'] : 'no dimensions found'
 		);
 	}
 
