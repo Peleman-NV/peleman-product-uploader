@@ -713,11 +713,6 @@ class PpuAdmin
 		$finalResponse = array();
 
 		foreach ($dataArray as $item) {
-			// if (isset($item->image->name)) { // match images
-			// 	$imageId = $this->getImageIdByName($item->image->name);
-			// 	$item->image->id = $imageId;
-			// }
-
 			try {
 				if (get_term_by('slug', $item->slug, 'product_' . $shortObjectName)) {
 					$object = get_term_by('slug', $item->slug, 'product_' . $shortObjectName);
@@ -793,12 +788,12 @@ class PpuAdmin
 
 				if (isset($variation->image) && $variation->image != null) {
 
-					$imageId = $this->getImageIdByName($variation->image->name);
+					$imageId = $this->getImageIdByName($variation->image);
 					if ($imageId) {
-						$variation->image->id = $imageId;
+						$variation->image = array('id' => $imageId);
 					} else {
 						$response['status'] = 'error';
-						$response['message'] = "Image {$variation->image->name} not found";
+						$response['message'] = "Image {$variation->image} not found";
 					}
 				}
 
