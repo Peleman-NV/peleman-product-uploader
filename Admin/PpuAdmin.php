@@ -166,7 +166,7 @@ class PpuAdmin
 		return array(
 			'id' => $imageId,
 			'url' => wp_get_attachment_url($imageId),
-			'size' => $imageInformation['width'] . 'x' . $imageInformation['height']
+			'size' => !(empty($imageInformation['width'] && !empty($imageInformation['height']))) ? $imageInformation['width'] . 'x' . $imageInformation['height'] : 'no sizes found'
 		);
 	}
 
