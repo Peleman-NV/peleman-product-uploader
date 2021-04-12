@@ -984,10 +984,14 @@ class PpuAdmin
 		foreach ($dataArray as $item) {
 			try {
 				$attrName = 'pa_' . strtolower($item->attribute);
-				if (key_exists($attrName, $newCurrentTerms)) {
+				if (key_exists($attrName, $currentAttributesArray)) {
 					// get id of attribute, regardless of whether the term is found
-					$foundTerm = $newCurrentTerms[$attrName][array_keys($newCurrentTerms[$attrName])[0]];
-					$attrId = $foundTerm['attributeId'];
+					foreach ($currentAttributes as $attribute) {
+						if ($attribute->attribute_name == strtolower($item->attribute)) {
+							$attrId = $attribute->attribute_id;
+							break;
+						}
+					}
 					if (key_exists(strtolower($item->slug), $newCurrentTerms[$attrName])) {
 						// term exists
 						$termId = $newCurrentTerms[$attrName][strtolower($item->slug)]['id'];
@@ -995,10 +999,10 @@ class PpuAdmin
 						$response = (array) $api->put($endpoint, $item);
 						$tempResponse['action'] = 'modify term';
 					} else {
-						// term doesn't exist
+						//term doesn't exist
 						$endpoint = 'products/attributes/' . $attrId . '/terms';
-						$response = (array) $api->post($endpoint, $item);
 						$tempResponse['action'] = 'create term';
+						$response = (array) $api->post($endpoint, $item);
 					}
 					$tempResponse['status'] = 'success';
 					$tempResponse['id'] = $response['id'];
