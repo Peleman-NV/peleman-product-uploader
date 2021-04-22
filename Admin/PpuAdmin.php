@@ -607,6 +607,44 @@ class PpuAdmin
 		return;
 	}
 
+
+	/**	
+	 * Register post menu endpoint
+	 */
+	public function registerPostMenuEndpoint()
+	{
+		register_rest_route('ppu/v1', '/menu', array(
+			'methods' => 'POST',
+			'callback' => array($this, 'postMenu'),
+			'permission_callback' => '__return_true'
+		));
+	}
+
+	public function postMenu($request)
+	{
+		$data = json_decode($request->get_body());
+		$menuName = $data->menu_name;
+		$menu_exists = wp_get_nav_menu_object($menuName);
+
+		$menuItems = $data->items;
+
+		$response = [];
+		foreach ($menuItems as $item) {
+			$term = get_term_by('slug', $item->category_slug, 'product_cat');
+			$link = get_term_link($item->category_slug, 'product_cat'); // is this the same in a webshop with a difference URL structure
+			$response[$item->category_slug]  = $term;
+		}
+
+		// given slugs - create menu items for product categories
+		// will the items have an order?
+		// $response = [
+		// 	'data' => $data,
+		// 	'exists' => $menu_exists
+		// ];
+
+		wp_send_json($response, 200);
+	}
+
 	/**
 	 * Process products JSON
 	 */
