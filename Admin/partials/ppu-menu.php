@@ -51,6 +51,21 @@
         <button type="submit" class="button button-primary">Upload JSON</button>
     </form>
     <hr>
+    <h2>Upload JSON for menu (temp dev function).</h2>
+    <form action="admin-post.php" method="POST" enctype="multipart/form-data">
+        <input type="hidden" name="action" value="upload_menu">
+        <?php wp_nonce_field('upload_menu') ?>
+        <div class="form-row">
+            <div class="grid-medium-column">
+                <label for="ppu-upload">Click to select a JSON file</label>
+            </div>
+            <div class="grid-large-column">
+                <input id="ppu-upload" name="ppu-upload" type="file" accept="application/json">
+            </div>
+        </div>
+        <button type="submit" class="button button-primary">Upload JSON</button>
+    </form>
+    <hr>
     <h2>Show orders (temp dev function)</h2>
     <form action="admin-post.php" method="POST">
         <input type="hidden" name="action" value="show_orders">

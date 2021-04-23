@@ -623,26 +623,104 @@ class PpuAdmin
 	public function postMenu($request)
 	{
 		$data = json_decode($request->get_body());
+		$this->handleMenuUpload($data);
+	}
+
+	public function uploadMenuViaForm()
+	{
+		check_admin_referer('upload_menu');
+
+		$jsonData = file_get_contents($_FILES['ppu-upload']['tmp_name']);
+		$data = json_decode($jsonData);
+
+		$this->handleMenuUpload($data);
+	}
+
+	public function handleMenuUpload($data)
+	{
 		$menuName = $data->menu_name;
-		$menu_exists = wp_get_nav_menu_object($menuName);
+		$menuId = wp_get_nav_menu_object($menuName) ? wp_get_nav_menu_object($menuName)->term_id : 0;
 
-		$menuItems = $data->items;
+		// if menu exists, remove it
+		$menuId !== 0 ? wp_delete_nav_menu($menuId) : '';
+		$menuId = wp_create_nav_menu($menuName);
+		$response = ['menu ID' => $menuId];
 
-		$response = [];
-		foreach ($menuItems as $item) {
-			$term = get_term_by('slug', $item->category_slug, 'product_cat');
-			$link = get_term_link($item->category_slug, 'product_cat'); // is this the same in a webshop with a difference URL structure
-			$response[$item->category_slug]  = $term;
+		// set menu as active and primary
+		$locations = get_theme_mod('nav_menu_locations');
+		$locations['primary'] = $data->active ? $menuId : 0;
+		set_theme_mod('nav_menu_locations', $locations);
+
+		// put parents & children into seperate arrays
+		$parentItems = array_filter($data->items, function ($item) {
+			return $item->parent_slug === '';
+		});
+		$childItems = array_filter($data->items, function ($item) {
+			return $item->parent_slug !== '';
+		});
+
+		// create parents
+		foreach ($parentItems as $item) {
+			$link = get_term_link($item->category_slug, 'product_cat');
+
+			if (!isset($link->errors)) {
+				$this->create_menu_item($menuId, $item->menu_item_name, $link, 0, $item->position);
+			} else {
+				$response['status'] = 'error';
+				$response['message'] = "Problem processing item";
+				$response['menu_item_name'] = $item->menu_item_name;
+				$response['category_slug'] = $item->category_slug;
+				wp_send_json($response, 400);
+			}
 		}
 
-		// given slugs - create menu items for product categories
-		// will the items have an order?
-		// $response = [
-		// 	'data' => $data,
-		// 	'exists' => $menu_exists
-		// ];
+		// create children
+		while (!empty($childItems)) {
+			$currentMenuItems = wp_get_nav_menu_items($menuName);
 
+			foreach ($childItems as $key => $item) {
+				if (in_array($item->parent_menu_item_name, array_column($currentMenuItems, 'post_title'))) {
+					/**
+					 * TODO: what if a parent menu item name isn't found at all?  
+					 * Now, if it isn't found, the foreach goes on with the next one
+					 * and in the end, goes on an eternal loop not finding it, and NOT unsetting it
+					 */
+					$parentItem = $currentMenuItems[array_search($item->parent_menu_item_name, array_column($currentMenuItems, 'post_title'))];
+					$parentId = $parentItem->ID;
+
+					$link = get_term_link($item->category_slug, 'product_cat');
+					if (!isset($link->errors)) {
+						$this->create_menu_item($menuId, $item->menu_item_name, $link, $parentId, $item->position);
+					} else {
+						$response['status'] = 'error';
+						$response['message'] = "Problem processing item";
+						$response['menu_item_name'] = $item->menu_item_name;
+						$response['category_slug'] = $item->category_slug;
+						wp_send_json($response, 400);
+					}
+					unset($childItems[$key]);
+				}
+			}
+		}
+		$response['status'] = 'success';
 		wp_send_json($response, 200);
+	}
+
+	private function create_menu_item($menuId, $itemName, $categoryLink, $parentId = 0, $position = 0)
+	{
+		wp_update_nav_menu_item(
+			$menuId,
+			0, // current menu item ID - 0 for new item,
+			[
+				'menu-item-parent-id'     => $parentId,
+				'menu-item-position'      => $position,
+				'menu-item-type'          => 'custom',
+				'menu-item-title'         => $itemName,
+				'menu-item-url'           => $categoryLink,
+				'menu-item-attr-title'    => $itemName,
+				'menu-item-status'        => 'publish'
+			]
+		);
 	}
 
 	/**
