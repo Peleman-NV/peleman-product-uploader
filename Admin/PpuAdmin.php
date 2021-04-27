@@ -636,27 +636,44 @@ class PpuAdmin
 		$this->handleMenuUpload($data);
 	}
 
+	private function createMenuContainer($menu_name)
+	{
+		// $menuId = wp_get_nav_menu_object($menu_name) ? wp_get_nav_menu_object($menu_name)->term_id : 0;
+		// $menuId !== 0 ? wp_delete_nav_menu($menuId) : '';
+		$uniqueMenuName = $menu_name . '_' . time();
+		$menuId = wp_create_nav_menu($uniqueMenuName);
+
+		if (isset($menuId->errors)) {
+			return false;
+		}
+		return ['menu_id' => $menuId, 'menu_name' => $uniqueMenuName];
+	}
+
 	public function handleMenuUpload($data)
 	{
-		$menuName = $data->menu_name;
-		$menuId = wp_get_nav_menu_object($menuName) ? wp_get_nav_menu_object($menuName)->term_id : 0;
+		$response = [];
 
-		// if menu exists, remove it
-		$menuId !== 0 ? wp_delete_nav_menu($menuId) : '';
-		$menuId = wp_create_nav_menu($menuName);
-		$response = ['menu ID' => $menuId];
+		if ($createdMenu = $this->createMenuContainer($data->menu_name)) {
+			$menuId = $createdMenu['menu_id'];
+			$menuName = $createdMenu['menu_name'];
+		} else {
+			$response['status'] = 'error';
+			$response['message'] = "Error creating menu container";
+			wp_send_json($response, 400);
+		}
 
-		// set menu as active and primary
-		$locations = get_theme_mod('nav_menu_locations');
-		$locations['primary'] = $data->active ? $menuId : 0;
-		set_theme_mod('nav_menu_locations', $locations);
+		if ($data->active) {
+			$locations = get_theme_mod('nav_menu_locations');
+			$locations['vertical'] = $menuId;
+			set_theme_mod('nav_menu_locations', $locations);
+		}
 
 		// put parents & children into seperate arrays
 		$parentItems = array_filter($data->items, function ($item) {
-			return $item->parent_slug === '';
+			return $item->parent_category_slug === '';
 		});
 		$childItems = array_filter($data->items, function ($item) {
-			return $item->parent_slug !== '';
+			return $item->parent_category_slug !== '';
 		});
 
 		// create parents
@@ -673,6 +690,7 @@ class PpuAdmin
 				wp_send_json($response, 400);
 			}
 		}
+
 
 		// create children
 		while (!empty($childItems)) {
@@ -703,6 +721,7 @@ class PpuAdmin
 			}
 		}
 		$response['status'] = 'success';
+
 		wp_send_json($response, 200);
 	}
 
