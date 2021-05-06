@@ -1,0 +1,54 @@
+{
+    "type": "categories",
+    "items": [
+        {
+            "name": "Cars",
+            "slug": "cars",
+            "language_code": "",
+            "english_slug": "",
+            "description": "Automobiles."
+        },
+        {
+            "name": "Bikes",
+            "slug": "bikes",
+            "language_code": "",
+            "english_slug": "",
+            "description": "Bicycles."
+        },
+        {
+            "name": "Aeroplanes",
+            "slug": "aeroplanes",
+            "language_code": "",
+            "english_slug": "",
+            "description": "Sky things."
+        },
+        {
+            "name": "Hovercraft",
+            "slug": "hovercraft",
+            "language_code": "",
+            "english_slug": "",
+            "description": "It floats, but not really."
+        },
+        {
+            "name": "Autosx",
+            "slug": "autosx",
+            "language_code": "nl",
+            "english_slug": "cars",
+            "description": "Automobielen."
+        },
+        {
+            "name": "Fietsen",
+            "slug": "fietsen",
+            "language_code": "nl",
+            "english_slug": "bikes",
+            "description": "Yup, fietsen!"
+        },
+        {
+            "name": "Vliegtuigen",
+            "slug": "vliegtuigen",
+            "language_code": "nl",
+            "english_slug": "aeroplanes",
+            "description": "Ze vliegen."
+        }
+    ]
+}
