@@ -662,6 +662,7 @@ class PpuAdmin
 			wp_send_json($response, 400);
 		}
 
+		// set menu as active and primary
 		if ($data->active) {
 			$locations = get_theme_mod('nav_menu_locations');
 			$locations['vertical'] = $menuId;
@@ -670,10 +671,10 @@ class PpuAdmin
 
 		// put parents & children into seperate arrays
 		$parentItems = array_filter($data->items, function ($item) {
-			return $item->parent_category_slug === '';
+			return $item->parent_slug === '';
 		});
 		$childItems = array_filter($data->items, function ($item) {
-			return $item->parent_category_slug !== '';
+			return $item->parent_slug !== '';
 		});
 
 		// create parents
@@ -895,22 +896,68 @@ class PpuAdmin
 	private function handleCategoriesAndTags($dataArray, $shortObjectName, $longObjectName)
 	{
 		$finalResponse = array();
+		$iclType = $shortObjectName === 'cat' ? 'category' : 'post_tag';
 
 		foreach ($dataArray as $item) {
+			$slug = $item->slug;
+			$hasParentLanguage = !empty($item->english_slug);
+
 			try {
-				if (get_term_by('slug', $item->slug, 'product_' . $shortObjectName)) {
-					$object = get_term_by('slug', $item->slug, 'product_' . $shortObjectName);
-					$response = wp_update_term($object->term_id, 'product_' . $shortObjectName, array(
-						'description' => $item->description,
-						'slug'    => $item->slug
-					));
-					$tempResponse['action'] = 'modify ' . $longObjectName;
+				// child
+				if ($hasParentLanguage) {
+					$parentObject = get_term_by('slug', $item->english_slug, 'product_' . $shortObjectName);
+					/**
+					 * once a translation exists, a child is seemingly removed from the 'main' tags/categories.  Searching on it's slug or ID will return it's parent.
+					 * therefore we use icl_object_id
+					 */
+					$translatedObjectTermId = icl_object_id($parentObject->term_id, $iclType, false, $item->language_code);
+					// item already exists
+					if ($translatedObjectTermId) {
+						$updateResponse = $this->updateTranslatedTagOrCategory($translatedObjectTermId, $item, $shortObjectName);
+						if ($updateResponse === false) {
+							$tempResponse['status'] = 'error';
+							$tempResponse['message'] = "error encountered updating terms & terms taxonomy in database";
+						} else {
+							// get taxonomyId
+
+							global $wpdb;
+							$term_taxonomy = $wpdb->get_results("SELECT term_taxonomy_id FROM " . $wpdb->prefix . "term_taxonomy WHERE taxonomy = 'product_{$shortObjectName}' AND term_id = {$translatedObjectTermId};")[0];
+
+							$this->joinTranslatedTagOrCategoryWithParent($parentObject, $item, $term_taxonomy->term_taxonomy_id, $shortObjectName);
+							$response['term_id'] = $translatedObjectTermId;
+							$response['term_taxonomy_id'] = $term_taxonomy->term_taxonomy_id;
+							$tempResponse['action'] = 'modify child ' . $longObjectName;
+						}
+					}
+					// new item
+					if (!$translatedObjectTermId) {
+						$response = wp_insert_term($item->name, 'product_' . $shortObjectName, array(
+							'name' => $item->name,
+							'description' => $item->description,
+							'slug' => $slug
+						));
+						$this->joinTranslatedTagOrCategoryWithParent($parentObject, $item, $response['term_taxonomy_id'], $shortObjectName);
+						$tempResponse['action'] = 'create child ' . $longObjectName;
+					}
 				} else {
-					$response = wp_insert_term($item->name, 'product_' . $shortObjectName, array(
-						'description' => $item->description,
-						'slug'    => $item->slug
-					));
-					$tempResponse['action'] = 'create ' . $longObjectName;
+					$object = get_term_by('slug', $item->slug, 'product_' . $shortObjectName);
+					// item already exists
+					if ($object) {
+						$response = wp_update_term($object->term_id, 'product_' . $shortObjectName, array(
+							'name' => $item->name,
+							'description' => $item->description,
+						));
+						$tempResponse['action'] = 'modify parent ' . $longObjectName;
+					}
+					// new item
+					if (!$object) {
+						$response = wp_insert_term($item->name, 'product_' . $shortObjectName, array(
+							'name' => $item->name,
+							'description' => $item->description,
+							'slug'    => $item->slug
+						));
+						$tempResponse['action'] = 'create parent ' . $longObjectName;
+					}
 				}
 			} catch (\Throwable $th) {
 				$tempResponse['status'] = 'error';
@@ -927,7 +974,8 @@ class PpuAdmin
 				array_push($finalResponse, array(
 					'status' => 'success',
 					'action' => $tempResponse['action'],
-					'id' => $response['term_id'],
+					'term_id' => $response['term_id'],
+					'term_taxonomy_id' => $response['term_taxonomy_id'],
 					$longObjectName => $item->name
 				));
 			}
@@ -936,6 +984,42 @@ class PpuAdmin
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 
 		wp_send_json($finalResponse, $statusCode);
+	}
+
+	private function joinTranslatedTagOrCategoryWithParent($parentObject, $item, $termTaxonomyId, $shortObjectName)
+	{
+		$type = $shortObjectName === 'cat' ? 'tax_product_cat' : 'tax_product_tag';
+
+		global $wpdb;
+		$table = $wpdb->dbname . '.' . $wpdb->prefix . 'icl_translations';
+
+		// get parent trid
+		$sql = "SELECT * FROM {$table} WHERE element_id = {$parentObject->term_taxonomy_id} AND language_code = 'en' AND element_type = '{$type}';";
+		$result = $wpdb->get_results($sql)[0];
+		$trid =  $result->trid;
+
+		$updateQuery = "UPDATE {$table} SET language_code = '{$item->language_code}', source_language_code = 'en', trid = {$trid} WHERE element_type = '{$type}' AND element_id = {$termTaxonomyId};";
+		$wpdb->get_results($updateQuery);
+	}
+
+	private function updateTranslatedTagOrCategory($termId, $termObject, $shortObjectName)
+	{
+		/**
+		 * do wp_terms AND wp_terms_taxonomy
+		 */
+		$type = $shortObjectName === 'cat' ? 'product_cat' : 'product_tag';
+
+		global $wpdb;
+		$termsTable = $wpdb->prefix . 'terms';
+		$termsTaxonomyTable = $wpdb->prefix . 'term_taxonomy';
+
+		$termsResult = $wpdb->update($termsTable, ['name' => $termObject->name, 'slug' => $termObject->slug], ['term_id' => $termId]);
+		$termsTaxonomyResult = $wpdb->update($termsTaxonomyTable, ['description' => $termObject->description], ['term_id' => $termId, 'taxonomy' => $type]);
+
+		if ($termsResult === false || $termsTaxonomyResult === false) {
+			return false;
+		}
+		return true;
 	}
 
 	/**
