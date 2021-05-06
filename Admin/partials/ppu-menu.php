@@ -8,7 +8,7 @@
         <li>Pretty permalinks in <strong>Settings > Permalinks</strong> so that the custom endpoints are supported. Default permalinks will not work.</li>
         <li>When calling this plugin via API, you need to generate Woocommerce read/write API keys here: <strong>WooCommerce > Settings > Advanced > REST API > Add Key</strong>.</li>
     </ul>
-    <p>The base URL for the API endpoints is: <?= get_site_url(); ?><strong>/wp-json/ppu/v1/</strong>.
+    <p>The base URL for the API endpoints is: <strong><?= get_site_url(); ?>/wp-json/ppu/v1/</strong>.
     </p>
     <hr>
     <h2>Enter your WooCommerce API keys here</h2>
