@@ -26,14 +26,6 @@ if (!defined('WPINC')) {
 	die;
 }
 
-// Require WooCommerce
-// TODO require ppi
-$active_plugins = apply_filters('active_plugins', get_option('active_plugins'));
-if (!in_array('woocommerce/woocommerce.php', $active_plugins)) {
-	echo '<h1 class="error">This plugin requires WooCommerce (v5.0.0) to work properly.<br>To remove this message, please install and activate WooCommerce</h1>';
-	wp_die();
-}
-
 // Constants definition
 define('PELEMAN_PRODUCT_UPLOADER_VERSION', '1.0.0');
 /**
