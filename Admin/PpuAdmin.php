@@ -3,8 +3,6 @@
 namespace PelemanProductUploader\Admin;
 
 use Automattic\WooCommerce\Client;
-use WP_REST_Response;
-use WC_Product_Attribute;
 
 class PpuAdmin
 {
