@@ -1315,7 +1315,6 @@ class PpuAdmin
 		global $wpdb;
 		$table = $wpdb->dbname . '.' . $wpdb->prefix . 'icl_translations';
 		$elementType = "tax_{$type}";
-		echo 'writing!';
 		// get parent trid
 		$sql = "SELECT * FROM {$table} WHERE element_id = {$parentTermId} AND language_code = 'en' AND element_type = '{$elementType}';";
 		$result = $wpdb->get_results($sql)[0];
@@ -1323,7 +1322,6 @@ class PpuAdmin
 
 		$updateQuery = "UPDATE {$table} SET language_code = '{$languageCode}', source_language_code = 'en', trid = {$trid} WHERE element_type = '{$elementType}' AND element_id = {$childId};";
 		$wpdb->get_results($updateQuery);
-		echo $wpdb->last_query;
 	}
 
 	/**
