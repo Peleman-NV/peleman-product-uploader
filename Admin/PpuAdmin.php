@@ -849,6 +849,7 @@ class PpuAdmin
 			}
 
 			// // set default attribute
+			// if a certain attribute is set, overwrite the default defaults I set up here.  Leave whatever isn't set.  If an attribute is empty, remove that attribute from the default defaults.
 			// if (isset($item->default_attributes) && $item->default_attributes != null) {
 			// 	foreach ($item->default_attributes as $default_attribute) {
 			// 		// $attributeLookup = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
