@@ -1177,12 +1177,7 @@ class PpuAdmin
 		// get all terms per attribute
 		$newCurrentTerms = array();
 		foreach ($currentAttributesArray as $attrKey => $attrValue) {
-			$attributeTerms = get_terms(
-				array(
-					'taxonomy' => $attrKey,
-					'hide_empty' => false
-				)
-			);
+			$attributeTerms = $this->getAllTermsForSlug($attrValue['slug']);
 
 			if (empty($attributeTerms)) continue;
 
@@ -1191,7 +1186,7 @@ class PpuAdmin
 				$tempArray[$term->slug] = array(
 					'attributeId' => $attrValue['id'],
 					'attributeSlug' => $attrKey,
-					'id' => $term->term_id,
+					'id' => $term->term_taxonomy_id,
 				);
 			}
 			$newCurrentTerms[$attrKey] = $tempArray;
@@ -1199,6 +1194,7 @@ class PpuAdmin
 
 		$api = $this->apiClient();
 		foreach ($dataArray as $item) {
+			$hasParentLanguage = !empty($item->english_slug);
 			try {
 				$attrName = 'pa_' . strtolower($item->attribute);
 				if (key_exists($attrName, $currentAttributesArray)) {
@@ -1209,17 +1205,26 @@ class PpuAdmin
 							break;
 						}
 					}
-					if (key_exists(strtolower($item->slug), $newCurrentTerms[$attrName])) {
-						// term exists
-						$termId = $newCurrentTerms[$attrName][strtolower($item->slug)]['id'];
-						$endpoint = 'products/attributes/' . $attrId . '/terms/' . $termId;
-						$response = (array) $api->put($endpoint, $item);
-						$tempResponse['action'] = 'modify term';
-					} else {
-						//term doesn't exist
+					$foundTermId = $this->getExistingSlugId($attrName, $item->slug);
+					$foundParentTermId = $this->getExistingSlugId($attrName, $item->english_slug);
+					if (!$foundTermId) { //term doesn't exist
 						$endpoint = 'products/attributes/' . $attrId . '/terms';
 						$tempResponse['action'] = 'create term';
 						$response = (array) $api->post($endpoint, $item);
+					} else { // term exists
+						// for a translation, the WC endpoint it will edit the parent, not the translation.  This causes problems
+						// if item is a child/translation - do the edit in a different way
+						if ($hasParentLanguage === true) { // if it's a translated/childItem, get the parent's details to link to parent
+							$this->updateExistingTranslatedTerm($foundTermId, $item);
+							$response['id'] = intval($foundTermId);
+						} else {
+							$endpoint = 'products/attributes/' . $attrId . '/terms/' . $foundTermId;
+							$response = (array) $api->put($endpoint, $item);
+						}
+						$tempResponse['action'] = 'modify term';
+					}
+					if ($hasParentLanguage === true) { // if it's a translated/childItem, get the parent's details to link to parent
+						$this->joinTranslatedTermWithParent($attrName, $foundParentTermId, $this->getExistingSlugId($attrName, $item->slug), $item->language_code);
 					}
 					$tempResponse['status'] = 'success';
 					$tempResponse['id'] = $response['id'];
@@ -1252,8 +1257,73 @@ class PpuAdmin
 			}
 			$response = array();
 		}
+
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 		wp_send_json($finalResponse, $statusCode);
+	}
+
+	private function updateExistingTranslatedTerm($termId, $termItem)
+	{
+		global $wpdb;
+		$termsTable = $wpdb->prefix . 'terms';
+		$termsTaxonomyTable = $wpdb->prefix . 'term_taxonomy';
+
+		$termsResult = $wpdb->update($termsTable, ['name' => $termItem->name, 'slug' => $termItem->slug], ['term_id' => $termId]);
+		$termsTaxonomyResult = $wpdb->update($termsTaxonomyTable, ['description' => $termItem->description], ['term_id' => $termId]);
+
+		if ($termsResult === false || $termsTaxonomyResult === false) {
+			return false;
+		}
+		return true;
+	}
+
+	private function getExistingSlugId($attrName, $slug, $name = null)
+	{
+		global $wpdb;
+		$table = $wpdb->dbname . '.' . $wpdb->prefix . 'term_taxonomy';
+		$joinTable = $wpdb->dbname . '.' . $wpdb->prefix . 'terms';
+
+		// get parent trid
+		$sql = "SELECT {$table}.term_taxonomy_id FROM {$table} INNER JOIN {$joinTable} on {$table}.term_id = {$joinTable}.term_id WHERE taxonomy = '{$attrName}' AND slug = '{$slug}'";
+		if (is_null($name)) {
+			$sql .= ";";
+		} else {
+			$sql .= " AND name = '{$name}';";
+		}
+		$result = $wpdb->get_results($sql);
+
+		if (empty($result)) {
+			return false;
+		}
+
+		return $result[0]->term_taxonomy_id;
+	}
+
+	private function getAllTermsForSlug($slug)
+	{
+		global $wpdb;
+		$table = $wpdb->dbname . '.' . $wpdb->prefix . 'term_taxonomy';
+		$joinTable = $wpdb->dbname . '.' . $wpdb->prefix . 'terms';
+
+		// get parent trid
+		$sql = "SELECT {$table}.term_taxonomy_id, {$table}.term_id, {$table}.taxonomy, {$joinTable}.name, {$joinTable}.slug FROM {$table} INNER JOIN {$joinTable} on {$table}.term_id = {$joinTable}.term_id WHERE taxonomy = 'pa_{$slug}';";
+		return $wpdb->get_results($sql);
+	}
+
+	private function joinTranslatedTermWithParent($type, $parentTermId, $childId, $languageCode)
+	{
+		global $wpdb;
+		$table = $wpdb->dbname . '.' . $wpdb->prefix . 'icl_translations';
+		$elementType = "tax_{$type}";
+		echo 'writing!';
+		// get parent trid
+		$sql = "SELECT * FROM {$table} WHERE element_id = {$parentTermId} AND language_code = 'en' AND element_type = '{$elementType}';";
+		$result = $wpdb->get_results($sql)[0];
+		$trid = $result->trid;
+
+		$updateQuery = "UPDATE {$table} SET language_code = '{$languageCode}', source_language_code = 'en', trid = {$trid} WHERE element_type = '{$elementType}' AND element_id = {$childId};";
+		$wpdb->get_results($updateQuery);
+		echo $wpdb->last_query;
 	}
 
 	/**
