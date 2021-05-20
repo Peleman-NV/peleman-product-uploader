@@ -810,10 +810,6 @@ class PpuAdmin
 		foreach ($dataArray as $item) {
 			// set reviews to false
 			$item->reviews_allowed = 0;
-			print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r(
-				$item,
-				true
-			) . '</pre>');
 
 			// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
 			$productId = wc_get_product_id_by_sku($item->sku);
@@ -834,17 +830,39 @@ class PpuAdmin
 				}
 			}
 
+			// for each attribute, take the first option and add to default_attr
+			$item->default_attributes = [];
 			if (isset($item->attributes) && $item->attributes != null) {
-				foreach ($item->attributes as $attribute) {
+				foreach ($item->attributes as $key => $attribute) {
+
 					$attributeLookup = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
 					if ($attributeLookup['result'] == 'error') {
 						$response['status'] = 'error';
 						$response['message'] = "Attribute {$attributeLookup['slug']} not found";
 					} else {
 						$attribute->id = $attributeLookup['id'];
+
+						$item->default_attributes[$key]->id = $attribute->id;
+						$item->default_attributes[$key]->option = $attribute->options[0];
 					}
 				}
 			}
+
+			// // set default attribute
+			// if (isset($item->default_attributes) && $item->default_attributes != null) {
+			// 	foreach ($item->default_attributes as $default_attribute) {
+			// 		// $attributeLookup = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
+			// 		// if ($attributeLookup['result'] == 'error') {
+			// 		// 	$response['status'] = 'error';
+			// 		// 	$response['message'] = "Attribute {$attributeLookup['slug']} not found";
+			// 		// } else {
+			// 		$default_attribute->id = 2;
+			// 		$default_attribute->option = '15x15cm';
+			// 	}
+			// 	// }
+			// }
+
+
 
 			if (isset($item->images) && $item->images != null) {
 				foreach ($item->images as $image) {
@@ -864,6 +882,10 @@ class PpuAdmin
 						$response = (array) $api->put($endpoint . $productId, $item);
 						$response['status'] = 'success';
 						$response['action'] = 'modify product';
+						print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r(
+							$item,
+							true
+						) . '</pre>');
 					} else {
 						$response = (array) $api->post($endpoint, $item);
 						$response['status'] = 'success';
@@ -892,6 +914,12 @@ class PpuAdmin
 
 			$response = array();
 		}
+		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r(
+			$finalResponse,
+			true
+		) . '</pre>');
+		die();
+
 		wp_send_json($finalResponse, 200);
 	}
 
