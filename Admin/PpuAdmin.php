@@ -808,6 +808,13 @@ class PpuAdmin
 		$response = array();
 
 		foreach ($dataArray as $item) {
+			// set reviews to false
+			$item->reviews_allowed = 0;
+			print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r(
+				$item,
+				true
+			) . '</pre>');
+
 			// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
 			$productId = wc_get_product_id_by_sku($item->sku);
 
