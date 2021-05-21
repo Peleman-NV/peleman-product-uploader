@@ -841,29 +841,22 @@ class PpuAdmin
 						$response['message'] = "Attribute {$attributeLookup['slug']} not found";
 					} else {
 						$attribute->id = $attributeLookup['id'];
-
-						$item->default_attributes[$key]->id = $attribute->id;
-						$item->default_attributes[$key]->option = $attribute->options[0];
+						// set default attributes
+						if ($attribute->default !== false) {
+							if (!empty($attribute->default)) {
+								// use the given default
+								$item->default_attributes[$key]->id = $attribute->id;
+								$item->default_attributes[$key]->option = $attribute->default;
+							}
+							if (empty($attribute->default)) {
+								// first option is the default
+								$item->default_attributes[$key]->id = $attribute->id;
+								$item->default_attributes[$key]->option = $attribute->options[0];
+							}
+						}
 					}
 				}
 			}
-
-			// // set default attribute
-			// if a certain attribute is set, overwrite the default defaults I set up here.  Leave whatever isn't set.  If an attribute is empty, remove that attribute from the default defaults.
-			// if (isset($item->default_attributes) && $item->default_attributes != null) {
-			// 	foreach ($item->default_attributes as $default_attribute) {
-			// 		// $attributeLookup = $this->getAttributeIdBySlug($attribute->slug, $currentAttributes['attributes']);
-			// 		// if ($attributeLookup['result'] == 'error') {
-			// 		// 	$response['status'] = 'error';
-			// 		// 	$response['message'] = "Attribute {$attributeLookup['slug']} not found";
-			// 		// } else {
-			// 		$default_attribute->id = 2;
-			// 		$default_attribute->option = '15x15cm';
-			// 	}
-			// 	// }
-			// }
-
-
 
 			if (isset($item->images) && $item->images != null) {
 				foreach ($item->images as $image) {
