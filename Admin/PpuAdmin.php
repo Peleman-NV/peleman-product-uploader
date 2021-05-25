@@ -758,19 +758,19 @@ class PpuAdmin
 				$this->handleProducts($items);
 				break;
 			case 'variations':
-				$response = $this->handleProductVariations($items);
+				$this->handleProductVariations($items);
 				break;
 			case 'categories':
-				$response = $this->handleCategoriesAndTags($items, 'cat', 'category');
+				$this->handleCategoriesAndTags($items, 'cat', 'category');
 				break;
 			case 'attributes':
-				$response = $this->handleAttributes($items);
+				$this->handleAttributes($items);
 				break;
 			case 'terms':
-				$response = $this->handleAttributeTerms($items);
+				$this->handleAttributeTerms($items);
 				break;
 			case 'tags':
-				$response = $this->handleCategoriesAndTags($items, 'tag', 'tag');
+				$this->handleCategoriesAndTags($items, 'tag', 'tag');
 				break;
 			case 'images':
 				break;
@@ -810,10 +810,32 @@ class PpuAdmin
 		foreach ($dataArray as $item) {
 			// set reviews to false
 			$item->reviews_allowed = 0;
+			$isParentProduct = empty($item->lang);
+			$isNewProduct = false;
 
-			// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
 			$productId = wc_get_product_id_by_sku($item->sku);
+			$parentProductId = null;
+			if ($isParentProduct) { // 
+				// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
+				$isNewProduct = !($productId != 0 || $productId != null);
+			} else {
+				$parentProductId = $productId;
+				if ($parentProductId === null || $parentProductId === 0) {
+					$response['status'] = 'error';
+					$response['message'] = "Parent product not found (you are trying to upload a translated product, but I can't find its default language counterpart)";
+				}
 
+				$productId = apply_filters('wpml_object_id', $parentProductId, 'post', TRUE, $item->lang);
+
+
+				$isNewProduct = $parentProductId === $productId;
+				// clear SKU for translated products to avoid 'duplicate SKU' errors
+				unset($item->sku);
+				// set product as translation of the parent
+				$item->translation_of = $parentProductId;
+			}
+
+			// get id's for all categories, tags, attributes, and images.
 			if (isset($item->categories) && $item->categories != null) {
 				foreach ($item->categories as $category) {
 					if (!is_int($category->slug)) {
@@ -872,18 +894,14 @@ class PpuAdmin
 
 			if (!isset($response['status'])) {
 				try {
-					if ($productId != 0 || $productId != null) {
-						$response = (array) $api->put($endpoint . $productId, $item);
-						$response['status'] = 'success';
-						$response['action'] = 'modify product';
-						print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r(
-							$item,
-							true
-						) . '</pre>');
-					} else {
+					if ($isNewProduct) {
 						$response = (array) $api->post($endpoint, $item);
 						$response['status'] = 'success';
 						$response['action'] = 'create product';
+					} else {
+						$response = (array) $api->put($endpoint . $productId, $item);
+						$response['status'] = 'success';
+						$response['action'] = 'modify product';
 					}
 				} catch (\Throwable $th) {
 					$response['status'] = 'error';
@@ -905,14 +923,8 @@ class PpuAdmin
 					'product' => $item->name
 				));
 			}
-
 			$response = array();
 		}
-		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r(
-			$finalResponse,
-			true
-		) . '</pre>');
-		die();
 
 		wp_send_json($finalResponse, 200);
 	}
