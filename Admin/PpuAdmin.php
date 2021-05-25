@@ -817,7 +817,7 @@ class PpuAdmin
 			$parentProductId = null;
 			if ($isParentProduct) { // 
 				// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
-				$isNewProduct = !($productId != 0 || $productId != null);
+				$isNewProduct = ($productId === 0 || $productId === null);
 			} else {
 				$parentProductId = $productId;
 				if ($parentProductId === null || $parentProductId === 0) {
@@ -1073,12 +1073,42 @@ class PpuAdmin
 
 		// Products loop
 		foreach ($dataArray as $item) {
-			$productId = wc_get_product_id_by_sku($item->parent_product_sku);
-			$endpoint = 'products/' . $productId . '/variations/';
 
 			// Variations loop
 			foreach ($item->variations as $variation) {
+				// is it a parent variation?
+				$isParentVariation = empty($variation->lang);
+				$productId = wc_get_product_id_by_sku($item->parent_product_sku);
+
+				$parentVariationId = null;
 				$variationId = wc_get_product_id_by_sku($variation->sku);
+				if ($isParentVariation) {
+					// set to productID for parent product, or if translation, for child product
+					$isNewVariation = ($variationId === 0 || $variationId === null);
+				} else {
+					// if it's a translation, get childProductID for endpoint, not parentProductId
+					$productId = apply_filters('wpml_object_id', $productId, 'post', TRUE, $variation->lang);
+
+					$parentVariationId = $variationId;
+					if ($parentVariationId === null || $parentVariationId === 0) {
+						$response['status'] = 'error';
+						$response['message'] = "Parent product not found (you are trying to upload a translated variation, but I can't find its default language counterpart)";
+					}
+
+					// this returns the parent ID if no child is found
+					$variationId = apply_filters('wpml_object_id', $parentVariationId, 'post', TRUE, $variation->lang);
+
+					$isNewVariation = $parentVariationId === $variationId;
+					if ($isNewVariation) {
+						unset($variationId);
+					}
+					// clear SKU for translated products to avoid 'duplicate SKU' errors
+					unset($variation->sku);
+					// set product as translation of the parent
+					$variation->translation_of = $parentVariationId;
+				}
+
+				$endpoint = 'products/' . $productId . '/variations/';
 
 				// Attributes loop
 				if (isset($variation->attributes) && $variation->attributes != null) {
