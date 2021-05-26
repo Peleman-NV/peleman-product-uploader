@@ -636,8 +636,8 @@ class PpuAdmin
 
 	private function createMenuContainer($menu_name)
 	{
-		// $menuId = wp_get_nav_menu_object($menu_name) ? wp_get_nav_menu_object($menu_name)->term_id : 0;
-		// $menuId !== 0 ? wp_delete_nav_menu($menuId) : '';
+		if (empty($menu_name)) return false;
+
 		$uniqueMenuName = $menu_name . '_' . time();
 		$menuId = wp_create_nav_menu($uniqueMenuName);
 
@@ -661,84 +661,109 @@ class PpuAdmin
 		}
 
 		// set menu as active and primary
-		if ($data->active) {
-			$locations = get_theme_mod('nav_menu_locations');
-			$locations['vertical'] = $menuId;
-			set_theme_mod('nav_menu_locations', $locations);
-		}
+		// if ($data->active) {
+		// 	$locations = get_theme_mod('nav_menu_locations');
+		// 	$locations['vertical'] = $menuId;
+		// 	set_theme_mod('nav_menu_locations', $locations);
+		// }
 
 		// put parents & children into seperate arrays
 		$parentItems = array_filter($data->items, function ($item) {
-			return $item->parent_slug === '';
+			return $item->parent_category_slug === '';
 		});
 		$childItems = array_filter($data->items, function ($item) {
-			return $item->parent_slug !== '';
+			return $item->parent_category_slug !== '';
 		});
 
 		// create parents
 		foreach ($parentItems as $item) {
-			$link = get_term_link($item->category_slug, 'product_cat');
+			$term = get_term_by('slug', $item->category_slug, 'product_cat');
 
-			if (!isset($link->errors)) {
-				$this->create_menu_item($menuId, $item->menu_item_name, $link, 0, $item->position);
-			} else {
+			if ($term === false) {
 				$response['status'] = 'error';
 				$response['message'] = "Problem processing item";
 				$response['menu_item_name'] = $item->menu_item_name;
 				$response['category_slug'] = $item->category_slug;
 				wp_send_json($response, 400);
 			}
+
+			if (!is_int($this->create_menu_item($menuId, $item->menu_item_name, $term, 0, $item->position))) {
+				$response['status'] = 'error';
+				$response['message'] = "Problem creating parent item";
+				$response['menu_item_name'] = $item->menu_item_name;
+				break;
+			}
 		}
 
+		if (isset($response['status']) && $response['status'] === 'error') {
+			wp_send_json($response, 400);
+		}
 
-		// create children
 		while (!empty($childItems)) {
 			$currentMenuItems = wp_get_nav_menu_items($menuName);
-
 			foreach ($childItems as $key => $item) {
-				if (in_array($item->parent_menu_item_name, array_column($currentMenuItems, 'post_title'))) {
-					/**
-					 * TODO: what if a parent menu item name isn't found at all?  
-					 * Now, if it isn't found, the foreach goes on with the next one
-					 * and in the end, goes on an eternal loop not finding it, and NOT unsetting it
-					 */
-					$parentItem = $currentMenuItems[array_search($item->parent_menu_item_name, array_column($currentMenuItems, 'post_title'))];
-					$parentId = $parentItem->ID;
+				// get parentID
+				if (in_array($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))) {
+					$parentItem = $currentMenuItems[array_search($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))];
+					$item->parentId = $parentItem->ID;
 
-					$link = get_term_link($item->category_slug, 'product_cat');
-					if (!isset($link->errors)) {
-						$this->create_menu_item($menuId, $item->menu_item_name, $link, $parentId, $item->position);
-					} else {
+					$term = get_term_by('slug', $item->category_slug, 'product_cat');
+
+					if ($term === false) {
 						$response['status'] = 'error';
 						$response['message'] = "Problem processing item";
 						$response['menu_item_name'] = $item->menu_item_name;
 						$response['category_slug'] = $item->category_slug;
 						wp_send_json($response, 400);
+					} else {
+						if (!is_int($this->create_menu_item($menuId, $item->menu_item_name, $term, $item->parentId, $item->position))) {
+							$response['status'] = 'error';
+							$response['message'] = "Problem creating child item";
+							$response['menu_item_name'] = $item->menu_item_name;
+							break;
+						}
 					}
 					unset($childItems[$key]);
 				}
 			}
 		}
+
 		$response['status'] = 'success';
+		$response['message'] = 'menu created successfully';
 
 		wp_send_json($response, 200);
 	}
 
-	private function create_menu_item($menuId, $itemName, $categoryLink, $parentId = 0, $position = 0)
+	private function create_menu_item($menuId, $itemName, $term, $parentId = 0, $position = 0)
 	{
-		wp_update_nav_menu_item(
-			$menuId,
-			0, // current menu item ID - 0 for new item,
-			[
-				'menu-item-parent-id'     => $parentId,
-				'menu-item-position'      => $position,
-				'menu-item-type'          => 'custom',
-				'menu-item-title'         => $itemName,
-				'menu-item-url'           => $categoryLink,
-				'menu-item-attr-title'    => $itemName,
-				'menu-item-status'        => 'publish'
-			]
-		);
+		/**
+		 * make it possible to create
+		 * category
+		 * custom
+		 * product 
+		 */
+
+		try {
+			$response = wp_update_nav_menu_item(
+				$menuId,
+				0, // current menu item ID - 0 for new item,
+				[
+					'menu-item-object-id'		=> $term->term_id,
+					'menu-item-object'			=> $term->taxonomy,
+					'menu-item-title'			=> $itemName, // display name
+					'menu-item-status'			=> 'publish',
+					'menu-item-type'			=> 'taxonomy',
+					'menu-item-parent-id' 	    => $parentId,
+					'menu-item-position'	    => $position,
+					'menu-item-attr-title'      => $itemName, // css title attribute
+				]
+			);
+		} catch (\Throwable $th) {
+			$response['status'] = 'error';
+			$response['message'] = $th->getMessage();
+		}
+
+		return $response;
 	}
 
 	/**
