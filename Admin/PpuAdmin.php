@@ -677,9 +677,11 @@ class PpuAdmin
 		}
 
 		while (!empty($childItems)) {
+			$currentNumberOfChildItems = count($childItems);
+
 			$currentMenuItems = wp_get_nav_menu_items($menuName);
 			foreach ($childItems as $key => $item) {
-				// get parentID
+				// if parent is found: get parentID, create item, and remove from array
 				if (in_array($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))) {
 					$parentItem = $currentMenuItems[array_search($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))];
 					$item->parentId = $parentItem->ID;
@@ -693,6 +695,14 @@ class PpuAdmin
 
 					unset($childItems[$key]);
 				}
+			}
+			$newCurrentNumberOfChildItems = count($childItems);
+
+			if ($newCurrentNumberOfChildItems === $currentNumberOfChildItems) {
+				$response['status'] = 'error';
+				$response['message'] = "Error creating item(s)";
+				$response['items'] = array_values($childItems);
+				break;
 			}
 		}
 
@@ -741,6 +751,14 @@ class PpuAdmin
 			];
 		} else if (empty($item->category_slug) && empty($item->custom_url) && !empty($item->product_sku)) {
 			$productId = wc_get_product_id_by_sku($item->product_sku);
+
+			if ($productId === 0) {
+				$response['status'] = 'error';
+				$response['message'] = "Error finding product";
+				$response['menu_item_name'] = $item->menu_item_name;
+				$response['category_slug'] = $item->product_sku;
+				wp_send_json($response, 400);
+			}
 
 			$menuObject = [
 				'menu-item-type'          => 'post_type',
