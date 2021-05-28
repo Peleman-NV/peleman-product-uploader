@@ -712,6 +712,7 @@ class PpuAdmin
 
 		$response['status'] = 'success';
 		$response['message'] = 'menu created successfully';
+		$response['menu_name'] = $menuName;
 
 		wp_send_json($response, 200);
 	}
