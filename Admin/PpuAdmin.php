@@ -1233,21 +1233,33 @@ class PpuAdmin
 		$api = $this->apiClient();
 		$endpoint = 'products/attributes/';
 		$currentAttributes = wc_get_attribute_taxonomies();
+
 		$currentAttributesArray = array();
 		foreach ($currentAttributes as $attribute) {
 			$currentAttributesArray[$attribute->attribute_name] = array(
 				'id' => $attribute->attribute_id,
 				'slug' => $attribute->attribute_name,
+				'name' => $attribute->attribute_label
 			);
 		}
 
 		foreach ($dataArray as $item) {
+			$isParentAttribute = empty($item->english_slug);
+
 			try {
 				if (key_exists($item->slug, $currentAttributesArray)) {
-					$response = (array) $api->put($endpoint . $currentAttributesArray[$item->slug]['id'], $item);
+					if ($isParentAttribute) {
+						$response = (array) $api->put($endpoint . $currentAttributesArray[$item->slug]['id'], $item);
+					} else {
+						$this->addOrUpdateTranslatedAttribute($item, $currentAttributesArray[$item->english_slug]['name']);
+					}
 					$tempResponse['action'] = 'modify attribute';
 				} else {
-					$response = (array) $api->post($endpoint, $item);
+					if ($isParentAttribute) {
+						$response = (array) $api->post($endpoint, $item);
+					} else {
+						$this->addOrUpdateTranslatedAttribute($item, $currentAttributesArray[$item->english_slug]['name']);
+					}
 					$tempResponse['action'] = 'create attribute';
 				}
 				$tempResponse['status'] = 'success';
@@ -1279,6 +1291,32 @@ class PpuAdmin
 		wp_send_json($finalResponse, $statusCode);
 	}
 
+	private function addOrUpdateTranslatedAttribute($attribute, $parentAttributeName)
+	{
+		$languageCode = $attribute->lang;
+		$translatedAttributeName = $attribute->name;
+
+		global $wpdb;
+		$selectStringQuery = "SELECT `id`, `name`, `value` FROM `{$wpdb->prefix}icl_strings` WHERE `name` = 'taxonomy singular name: " . $parentAttributeName . "' AND `value` = '" . $parentAttributeName . "' AND `context` = 'WordPress' LIMIT 1";
+
+		$stringId = $wpdb->get_results($selectStringQuery);
+
+		if (count($stringId) > 0) {
+			$translatedStringResult = $wpdb->get_results("SELECT `id`, `string_id`, `language`, `value` FROM `{$wpdb->prefix}icl_string_translations` WHERE `string_id` = '" . $stringId[0]->id . "' AND `language` = '" . $languageCode . "' LIMIT 1");
+
+			if (count($translatedStringResult) == 0) {
+				$wpdb->query(
+					$wpdb->prepare("INSERT INTO `{$wpdb->prefix}icl_string_translations` ( `string_id`, `language`, `status`, `value` ) VALUES ( %d, %s, %d, %s )", $stringId[0]->id, $languageCode, 10, $translatedAttributeName)
+				);
+			} else {
+				if ($translatedStringResult[0]->value != $translatedAttributeName) {
+					$wpdb->query(
+						$wpdb->prepare("UPDATE `{$wpdb->prefix}icl_string_translations` SET `value` = %s WHERE `id` = %d", $translatedAttributeName, $translatedStringResult[0]->id)
+					);
+				}
+			}
+		}
+	}
 	/**
 	 * Upload handler: attribute terms
 	 */
