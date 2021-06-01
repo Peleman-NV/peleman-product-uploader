@@ -1000,6 +1000,7 @@ class PpuAdmin
 					 * once a translation exists, a child is seemingly removed from the 'main' tags/categories.  Searching on it's slug or ID will return it's parent.
 					 * therefore we use icl_object_id
 					 */
+
 					$translatedObjectTermId = icl_object_id($parentObject->term_id, $iclType, false, $item->language_code);
 					// item already exists
 					if ($translatedObjectTermId) {
@@ -1293,7 +1294,7 @@ class PpuAdmin
 
 	private function addOrUpdateTranslatedAttribute($attribute, $parentAttributeName)
 	{
-		$languageCode = $attribute->lang;
+		$languageCode = $attribute->language_code;
 		$translatedAttributeName = $attribute->name;
 
 		global $wpdb;
