@@ -521,6 +521,7 @@ class PpuAdmin
 
 	public function postImage($request)
 	{
+
 		$data = json_decode($request->get_body());
 		$finalResponse = array();
 
@@ -572,17 +573,23 @@ class PpuAdmin
 				$attach_data = wp_generate_attachment_metadata($attachment_id, $upload_path . $filename);
 				update_post_meta($attachment_id, '_wp_attachment_image_alt', $altText);
 
-				if (wp_update_attachment_metadata($attachment_id, $attach_data)) {
+				$metaDataUpdated = wp_update_attachment_metadata($attachment_id, $attach_data);
+
+				if ($metaDataUpdated) {
 					$response['status'] = 'success';
 					$response['id'] = $attachment_id;
 					$response['image_path'] = get_post_meta($attachment_id, '_wp_attached_file', true);
+				} else {
+					$response['status'] = 'error';
+					$response['message'] = 'Image upload failed';
 				}
 			} catch (\Throwable $th) {
 				$response['status'] = 'error';
+				$response['temp_exception_msg'] = $th->getMessage();
 				$response['message'] = $th->getMessage();
 			}
 
-			if ($response['status'] == 'success') {
+			if ($response['status'] !== 'error') {
 				array_push($finalResponse, array(
 					'status' => $response['status'],
 					'id' => $response['id'],
@@ -594,7 +601,7 @@ class PpuAdmin
 				array_push($finalResponse, array(
 					'status' => 'error',
 					'image_name' => $image->name,
-					'message' => "image upload failed"
+					'message' => $response['message'],
 				));
 			}
 			$response = array();
