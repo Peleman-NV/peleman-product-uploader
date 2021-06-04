@@ -1305,22 +1305,26 @@ class PpuAdmin
 		$translatedAttributeName = $attribute->name;
 
 		global $wpdb;
-		$selectStringQuery = "SELECT `id`, `name`, `value` FROM `{$wpdb->prefix}icl_strings` WHERE `name` = 'taxonomy singular name: " . $parentAttributeName . "' AND `value` = '" . $parentAttributeName . "' AND `context` = 'WordPress' LIMIT 1";
 
-		$stringId = $wpdb->get_results($selectStringQuery);
+		// get parent string results
+		$singularSelectStringQuery = "SELECT `id`, `name`, `value` FROM `{$wpdb->prefix}icl_strings` WHERE `name` = 'taxonomy singular name: " . $parentAttributeName . "' AND `value` = '" . $parentAttributeName . "' AND `context` = 'WordPress' LIMIT 1";
+		$pluralSelectStringQuery = "SELECT `id`, `name`, `value` FROM `{$wpdb->prefix}icl_strings` WHERE `name` = 'taxonomy general name: Product " . $parentAttributeName . "' AND `value` = 'Product " . $parentAttributeName . "' AND `context` = 'WordPress' LIMIT 1";
+		$singularStringResult = $wpdb->get_results($singularSelectStringQuery);
+		$pluralStringResult = $wpdb->get_results($pluralSelectStringQuery);
 
-		if (count($stringId) > 0) {
-			$translatedStringResult = $wpdb->get_results("SELECT `id`, `string_id`, `language`, `value` FROM `{$wpdb->prefix}icl_string_translations` WHERE `string_id` = '" . $stringId[0]->id . "' AND `language` = '" . $languageCode . "' LIMIT 1");
+		// if parent exists
+		if (count($singularStringResult) > 0) {
+			// get specific language results
+			$singularTranslatedStringResult = $wpdb->get_results("SELECT `id`, `string_id`, `language`, `value` FROM `{$wpdb->prefix}icl_string_translations` WHERE `string_id` = '" . $singularStringResult[0]->id . "' AND `language` = '" . $languageCode . "' LIMIT 1");
+			$pluralTranslatedStringResult = $wpdb->get_results("SELECT `id`, `string_id`, `language`, `value` FROM `{$wpdb->prefix}icl_string_translations` WHERE `string_id` = '" . $pluralStringResult[0]->id . "' AND `language` = '" . $languageCode . "' LIMIT 1");
 
-			if (count($translatedStringResult) == 0) {
-				$wpdb->query(
-					$wpdb->prepare("INSERT INTO `{$wpdb->prefix}icl_string_translations` ( `string_id`, `language`, `status`, `value` ) VALUES ( %d, %s, %d, %s )", $stringId[0]->id, $languageCode, 10, $translatedAttributeName)
-				);
+			if (count($singularTranslatedStringResult) == 0) {
+				$wpdb->query($wpdb->prepare("INSERT INTO `{$wpdb->prefix}icl_string_translations` ( `string_id`, `language`, `status`, `value` ) VALUES ( %d, %s, %d, %s )", $singularStringResult[0]->id, $languageCode, 10, $translatedAttributeName));
+				$wpdb->query($wpdb->prepare("INSERT INTO `{$wpdb->prefix}icl_string_translations` ( `string_id`, `language`, `status`, `value` ) VALUES ( %d, %s, %d, %s )", $pluralStringResult[0]->id, $languageCode, 10, $translatedAttributeName));
 			} else {
-				if ($translatedStringResult[0]->value != $translatedAttributeName) {
-					$wpdb->query(
-						$wpdb->prepare("UPDATE `{$wpdb->prefix}icl_string_translations` SET `value` = %s WHERE `id` = %d", $translatedAttributeName, $translatedStringResult[0]->id)
-					);
+				if ($singularTranslatedStringResult[0]->value != $translatedAttributeName) {
+					$wpdb->query($wpdb->prepare("UPDATE `{$wpdb->prefix}icl_string_translations` SET `value` = %s WHERE `id` = %d", $translatedAttributeName, $singularTranslatedStringResult[0]->id));
+					$wpdb->query($wpdb->prepare("UPDATE `{$wpdb->prefix}icl_string_translations` SET `value` = %s WHERE `id` = %d", $translatedAttributeName, $pluralTranslatedStringResult[0]->id));
 				}
 			}
 		}
