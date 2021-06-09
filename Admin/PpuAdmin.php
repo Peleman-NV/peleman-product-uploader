@@ -1383,6 +1383,7 @@ class PpuAdmin
 						$endpoint = 'products/attributes/' . $attrId . '/terms';
 						$tempResponse['action'] = 'create term';
 						$response = (array) $api->post($endpoint, $item);
+						if ($item->menu_order > 0) $this->updateTermOrder($response['id'], $item->menu_order);
 					} else { // term exists
 						// for a translation, the WC endpoint it will edit the parent, not the translation.  This causes problems
 						// if item is a child/translation - do the edit in a different way
@@ -1392,6 +1393,7 @@ class PpuAdmin
 						} else {
 							$endpoint = 'products/attributes/' . $attrId . '/terms/' . $foundTermId;
 							$response = (array) $api->put($endpoint, $item);
+							if ($item->menu_order > 0) $this->updateTermOrder($response['id'], $item->menu_order);
 						}
 						$tempResponse['action'] = 'modify term';
 					}
@@ -1432,6 +1434,24 @@ class PpuAdmin
 
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 		wp_send_json($finalResponse, $statusCode);
+	}
+
+	private function updateTermOrder($termId, $order)
+	{
+		global $wpdb;
+		$termMetaTable = $wpdb->prefix . 'termmeta';
+
+		// delete all term order lines
+		$condition = $wpdb->esc_like('order') . '%';
+		$sql  = $wpdb->prepare("SELECT meta_id FROM $termMetaTable WHERE term_id = $termId AND meta_key LIKE %s;", $condition);
+		$currentTermsOrderResult = $wpdb->get_results($sql);
+
+		foreach ($currentTermsOrderResult as $result) {
+			$wpdb->delete($termMetaTable, ['meta_id' => $result->meta_id]);
+		}
+
+		// create a proper one
+		$wpdb->insert($termMetaTable, ['meta_key' => 'order', 'term_id' => $termId, 'meta_value' => $order]);
 	}
 
 	private function updateExistingTranslatedTerm($termId, $termItem)
