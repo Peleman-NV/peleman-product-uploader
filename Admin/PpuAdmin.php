@@ -521,9 +521,10 @@ class PpuAdmin
 
 	public function postImage($request)
 	{
-
 		$data = json_decode($request->get_body());
 		$finalResponse = array();
+		require_once(ABSPATH . 'wp-admin/includes/image.php');
+		require_once(ABSPATH . 'wp-admin/includes/file.php');
 
 		foreach ($data->images as $image) {
 			$filename = $image->name;
@@ -531,61 +532,50 @@ class PpuAdmin
 			$contentText = $image->content;
 			$excerptText = $image->description;
 			$base64ImageString = $image->base64image;
-
+			$img = str_replace('data:image/jpeg;base64,', '', $base64ImageString);
+			$img = str_replace(' ', '+', $img);
+			$decoded = base64_decode($img);
+			$file_type = 'image/jpeg';
 			$upload_dir  = wp_upload_dir();
 			$upload_path = str_replace('/', DIRECTORY_SEPARATOR, $upload_dir['path']) . DIRECTORY_SEPARATOR;
 
-			$img             = str_replace('data:image/jpeg;base64,', '', $base64ImageString);
-			$img             = str_replace(' ', '+', $img);
-			$decoded         = base64_decode($img);
-			$file_type       = 'image/jpeg';
-
 			file_put_contents($upload_path . $filename, $decoded);
+
+			$attachment = array(
+				'post_mime_type' => $file_type,
+				'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
+				'post_content'   => $contentText,
+				'post_excerpt'   => $excerptText,
+				'post_status'    => 'inherit',
+				'guid'           => $upload_dir['url'] . '/' . basename($filename)
+			);
 
 			$imageExists = $this->getImageIdByName($filename);
 			if ($imageExists) {
 				$response['message'] = "Updated existing image";
-				$attachment = array(
-					'ID' => $imageExists,
-					'post_mime_type' => $file_type,
-					'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
-					'post_content'   => $contentText,
-					'post_excerpt'   => $excerptText,
-					'post_status'    => 'inherit',
-					'guid'           => $upload_dir['url'] . '/' . basename($filename)
-				);
+				$attachment['ID'] = $imageExists;
 			} else {
 				$response['message'] = "Created new image";
-				$attachment = array(
-					$file_type,
-					'post_mime_type' => $file_type,
-					'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
-					'post_content'   => $contentText,
-					'post_excerpt'   => $excerptText,
-					'post_status'    => 'inherit',
-					'guid'           => $upload_dir['url'] . '/' . basename($filename)
-				);
 			}
 
 			try {
-				$attachment_id = wp_insert_attachment($attachment, $upload_dir['path'] . '/' . $filename);
-				require_once(ABSPATH . 'wp-admin/includes/image.php');
+				$attachment_id = wp_insert_attachment($attachment, $upload_dir['path'] . '/' . $filename, 0, true);
+				!empty($altText) ? update_post_meta($attachment_id, '_wp_attachment_image_alt', $altText) : '';
 				$attach_data = wp_generate_attachment_metadata($attachment_id, $upload_path . $filename);
-				update_post_meta($attachment_id, '_wp_attachment_image_alt', $altText);
 
-				$metaDataUpdated = wp_update_attachment_metadata($attachment_id, $attach_data);
-
-				if ($metaDataUpdated) {
-					$response['status'] = 'success';
-					$response['id'] = $attachment_id;
-					$response['image_path'] = get_post_meta($attachment_id, '_wp_attached_file', true);
-				} else {
+				if (empty($attach_data)) {
 					$response['status'] = 'error';
 					$response['message'] = 'Image upload failed';
+					throw new \Exception('attach_data returned an empty array.');
+				} else {
+					wp_update_attachment_metadata($attachment_id, $attach_data);
 				}
+				$response['status'] = 'success';
+				$response['id'] = $attachment_id;
+				$response['image_path'] = get_post_meta($attachment_id, '_wp_attached_file', true);
 			} catch (\Throwable $th) {
 				$response['status'] = 'error';
-				$response['temp_exception_msg'] = $th->getMessage();
+				$response['exception'] = $th->getMessage();
 				$response['message'] = $th->getMessage();
 			}
 
