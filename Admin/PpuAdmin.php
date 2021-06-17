@@ -704,6 +704,7 @@ class PpuAdmin
 		}
 
 		if (isset($response['status']) && $response['status'] === 'error') {
+			wp_delete_nav_menu($menuId);
 			wp_send_json($response, 400);
 		}
 
