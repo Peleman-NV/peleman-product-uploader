@@ -1393,6 +1393,8 @@ class PpuAdmin
 					}
 					$tempResponse['status'] = 'success';
 					$tempResponse['id'] = $response['id'];
+					// set the Haru term meta color
+					if ($item->extra !== '' && $item->extra->hex_code !== '') $this->setColor($response['id'], $item->extra->hex_code);
 				} else {
 					$tempResponse['status'] = 'error';
 					$tempResponse['message'] = "attribute not found";
@@ -1425,6 +1427,36 @@ class PpuAdmin
 
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
 		wp_send_json($finalResponse, $statusCode);
+	}
+
+	private function setColor($id, $hexCode)
+	{
+		global $wpdb;
+		// check if line exists
+		$results = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}haru_termmeta WHERE haru_term_id = $id AND meta_key = 'product_attribute_color';");
+		if (empty($results)) {
+			$wpdb->insert(
+				$wpdb->prefix . 'haru_termmeta',
+				[
+					'term_id' => 0,
+					'haru_term_id' => $id,
+					'meta_key' => 'product_attribute_color',
+					'meta_value' => $hexCode
+				]
+			);
+			return true;
+		}
+		$wpdb->update(
+			$wpdb->prefix . 'haru_termmeta',
+			[
+				'meta_value' => $hexCode
+			],
+			[
+				'haru_term_id' => $id,
+				'meta_key' => 'product_attribute_color',
+			]
+		);
+		return true;
 	}
 
 	private function updateTermOrder($termId, $order)
