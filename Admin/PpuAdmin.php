@@ -648,71 +648,125 @@ class PpuAdmin
 	{
 		$response = [];
 
-		if ($createdMenu = $this->createMenuContainer($data->menu_name)) {
-			$menuId = $createdMenu['menu_id'];
-			$menuName = $createdMenu['menu_name'];
-		} else {
-			$response['status'] = 'error';
-			$response['message'] = "Error creating menu container";
-			wp_send_json($response, 400);
-		}
-
-		$parentItems = array_filter($data->items, function ($item) {
-			return $item->parent_menu_item_name === '';
-		});
-		$childItems = array_filter($data->items, function ($item) {
-			return $item->parent_menu_item_name !== '';
-		});
-
-		foreach ($parentItems as $item) {
-			if (!is_int($this->create_menu_item($menuId, $item))) {
-				$response['status'] = 'error';
-				$response['message'] = "Problem creating parent item";
-				$response['menu_item_name'] = $item->menu_item_name;
-				break;
+		$createdMenus = [];
+		foreach ($data->menus as $menu) {
+			if ($createdMenu = $this->createMenuContainer($menu->menu_name)) {
+				$menuId = $createdMenu['menu_id'];
+				$menuName = $createdMenu['menu_name'];
+				if ($menu->lang === '') $createdMenus[] = ['id' => $menuId, 'name' => $menu->menu_name, 'lang' => 'en'];
+				if ($menu->lang !== '') $createdMenus[] = ['id' => $menuId, 'name' => $menu->menu_name, 'lang' => $menu->lang];
+			} else {
+				$response[$menu->menu_name]['status'] = 'error';
+				$response[$menu->menu_name]['message'] = "Error creating menu container";
+				wp_send_json($response, 400);
 			}
-		}
 
-		while (!empty($childItems)) {
-			$currentNumberOfChildItems = count($childItems);
+			$parentItems = array_filter($menu->items, function ($item) {
+				return $item->parent_menu_item_name === '';
+			});
+			$childItems = array_filter($menu->items, function ($item) {
+				return $item->parent_menu_item_name !== '';
+			});
 
-			$currentMenuItems = wp_get_nav_menu_items($menuName);
-			foreach ($childItems as $key => $item) {
-				// if parent is found: get parentID, create item, and remove from array
-				if (in_array($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))) {
-					$parentItem = $currentMenuItems[array_search($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))];
-					$item->parentId = $parentItem->ID;
-
-					if (!is_int($this->create_menu_item($menuId, $item, $item->parentId))) {
-						$response['status'] = 'error';
-						$response['message'] = "Problem creating child item";
-						$response['menu_item_name'] = $item->menu_item_name;
-						break;
-					}
-
-					unset($childItems[$key]);
+			foreach ($parentItems as $item) {
+				if (!is_int($this->create_menu_item($menuId, $item))) {
+					$response[$menu->menu_name]['status'] = 'error';
+					$response[$menu->menu_name]['message'] = "Problem creating parent item";
+					$response[$menu->menu_name]['menu_item_name'] = $item->menu_item_name;
+					break;
 				}
 			}
-			$newCurrentNumberOfChildItems = count($childItems);
 
-			if ($newCurrentNumberOfChildItems === $currentNumberOfChildItems) {
-				$response['status'] = 'error';
-				$response['message'] = "Error creating item(s)";
-				$response['items'] = array_values($childItems);
-				break;
+			while (!empty($childItems)) {
+				$currentNumberOfChildItems = count($childItems);
+
+				$currentMenuItems = wp_get_nav_menu_items($menuName);
+				foreach ($childItems as $key => $item) {
+					// if parent is found: get parentID, create item, and remove from array
+					if (in_array($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))) {
+						$parentItem = $currentMenuItems[array_search($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))];
+						$item->parentId = $parentItem->ID;
+
+						if (!is_int($this->create_menu_item($menuId, $item, $item->parentId))) {
+							$response[$menu->menu_name]['status'] = 'error';
+							$response[$menu->menu_name]['message'] = "Problem creating child item";
+							$response[$menu->menu_name]['menu_item_name'] = $item->menu_item_name;
+							break;
+						}
+
+						unset($childItems[$key]);
+					}
+				}
+				$newCurrentNumberOfChildItems = count($childItems);
+
+				if ($newCurrentNumberOfChildItems === $currentNumberOfChildItems) {
+					$response[$menu->menu_name]['status'] = 'error';
+					$response[$menu->menu_name]['message'] = "Error creating item(s)";
+					$response[$menu->menu_name]['items'] = array_values($childItems);
+					break;
+				}
 			}
 		}
 
-		if (isset($response['status']) && $response['status'] === 'error') {
-			wp_delete_nav_menu($menuId);
-			wp_send_json($response, 400);
+		$this->joinCreatedMenus($createdMenus);
+
+		foreach ($response as $key => $value) {
+			if (isset($value) && $value['status'] === 'error') {
+				$this->deleteAllCreatedMenus($createdMenus);
+				wp_send_json($response, 400);
+			}
 		}
 
 		$response['status'] = 'success';
-		$response['message'] = 'menu created successfully';
-		$response['menu_name'] = $menuName;
+		$response['message'] = 'menu(\'s) created successfully';
+		$response['menus'] = $createdMenus;
 
 		wp_send_json($response, 200);
+	}
+
+	private function joinCreatedMenus($menuArray)
+	{
+		global $wpdb;
+		$defaultLanguageMenuArray = [];
+		// Get current term_relationships for menu ID's
+		$existingRelationships = [];
+		foreach ($menuArray as $menu) {
+			if ($menu['lang'] !== 'en') {
+				// get existing terms for secondary languages
+				$tempResult[$menu['lang']] = $wpdb->get_results("SELECT object_id FROM {$wpdb->prefix}term_relationships WHERE term_taxonomy_id = {$menu['id']};");
+				$mappedResult[$menu['lang']] = array_map(function ($e) {
+					return $e->object_id;
+				}, $tempResult[$menu['lang']]);
+				$existingRelationships[$menu['lang']] = implode(',', $mappedResult[$menu['lang']]);
+			}
+			if ($menu['lang'] === 'en') {
+				$defaultLanguageMenuArray = $menu;
+			}
+		}
+
+		// update menu items langauges
+		$stringTranslationsTable = $wpdb->prefix . 'icl_translations';
+		foreach ($existingRelationships as $language => $relationshipsString) {
+			$updateMenuItemsSql = "UPDATE $stringTranslationsTable SET language_code = '$language', source_language_code = 'en' WHERE element_id in ($relationshipsString);";
+			$wpdb->get_results($updateMenuItemsSql);
+		}
+
+		$tridSql = "SELECT trid FROM $stringTranslationsTable WHERE language_code = 'en' AND element_id = {$defaultLanguageMenuArray['id']};";
+		$trid = $wpdb->get_results($tridSql)[0]->trid;
+
+		// update menu container languages and sync trid's of menu container
+		foreach ($menuArray as $menu) {
+			if ($menu['lang'] === 'en') continue;
+			$updateMenuContainersSql = "UPDATE $stringTranslationsTable SET language_code = '{$menu['lang']}', trid = $trid, source_language_code = 'en' WHERE element_id = {$menu['id']};";
+			$wpdb->get_results($updateMenuContainersSql);
+		}
+	}
+
+	private function deleteAllCreatedMenus($menuArray)
+	{
+		foreach ($menuArray as $menuItem) {
+			wp_delete_nav_menu($menuItem['id']);
+		}
 	}
 
 	private function create_menu_item($menuId, $item, $parentId = 0)
