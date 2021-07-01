@@ -913,30 +913,42 @@ class PpuAdmin
 		foreach ($dataArray as $item) {
 			// set reviews to false
 			$item->reviews_allowed = 0;
+
+			// parent or translation
 			$isParentProduct = empty($item->lang);
-			$isNewProduct = false;
 
 			$productId = wc_get_product_id_by_sku($item->sku);
 			$parentProductId = null;
+			$childProductId = null;
+			$isNewProduct = false;
+
+			// if it's a parent, check if it exists
 			if ($isParentProduct) { // 
-				// if wc_get_product_id_by_sku returns an id, "update", otherwise "create"
+				// if wc_get_product_id_by_sku returns an id -> existing product: "update", else new product: "create"
 				$isNewProduct = ($productId === 0 || $productId === null);
+				// if it's a parent -> the product ID IS the product ID 
+				$parentProductId = $productId;
 			} else {
+				// if it's a child -> the parent ID IS the product ID 
 				$parentProductId = $productId;
 				if ($parentProductId === null || $parentProductId === 0) {
 					$response['status'] = 'error';
 					$response['message'] = "Parent product not found (you are trying to upload a translated product, but I can't find its default language counterpart)";
 				}
 
-				$productId = apply_filters('wpml_object_id', $parentProductId, 'post', TRUE, $item->lang);
+				// get the child's product ID
+				$childProductId = apply_filters('wpml_object_id', $parentProductId, 'post', false, $item->lang);
 
+				// if it's a child, we know the parentProductId - does the translatedProductId exist?
+				$isNewProduct = ($childProductId === 0 || $childProductId === null);
 
-				$isNewProduct = $parentProductId === $productId;
-				// clear SKU for translated products to avoid 'duplicate SKU' errors
+				// clear SKU for translated/child products to avoid 'duplicate SKU' errors - woocommerce sets this itself
 				unset($item->sku);
 				// set product as translation of the parent
 				$item->translation_of = $parentProductId;
 			}
+			// if child is null, product ID = parentId, else product ID = child ID
+			$productId = $childProductId === null ? $parentProductId : $childProductId;
 
 			// get id's for all categories, tags, attributes, and images.
 			if (isset($item->categories) && $item->categories != null) {
@@ -998,10 +1010,12 @@ class PpuAdmin
 			if (!isset($response['status'])) {
 				try {
 					if ($isNewProduct) {
+						// this logic route creates a product ID
 						$response = (array) $api->post($endpoint, $item);
 						$response['status'] = 'success';
 						$response['action'] = 'create product';
 					} else {
+						// this logic route has the product ID and edits it
 						$response = (array) $api->put($endpoint . $productId, $item);
 						$response['status'] = 'success';
 						$response['action'] = 'modify product';
