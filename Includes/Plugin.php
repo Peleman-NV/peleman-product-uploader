@@ -121,6 +121,7 @@ class Plugin
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostMenuEndpoint');
 		$this->loader->add_action('admin_post_upload_menu', $plugin_admin, 'uploadMenuViaForm');
 		$this->loader->add_action('admin_post_nopriv_upload_menu', $plugin_admin, 'uploadMenuViaForm');
+		$this->loader->add_action('big_image_size_threshold', $plugin_admin, 'disableImageDownscaling');
 	}
 
 

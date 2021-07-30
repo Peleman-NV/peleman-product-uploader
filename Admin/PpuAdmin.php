@@ -1712,4 +1712,12 @@ class PpuAdmin
 
 		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
 	}
+
+	/**
+	 * Disable image downscaling - this add the word "scaled" to images - return false to disable
+	 */
+	public function disableImageDownscaling()
+	{
+		return false;
+	}
 }
