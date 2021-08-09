@@ -922,6 +922,9 @@ class PpuAdmin
 			$childProductId = null;
 			$isNewProduct = false;
 
+			// save the sku for the response 
+			$response_sku = $item->sku;
+
 			// if it's a parent, check if it exists
 			if ($isParentProduct) { // 
 				// if wc_get_product_id_by_sku returns an id -> existing product: "update", else new product: "create"
@@ -1031,13 +1034,15 @@ class PpuAdmin
 					'status' => $response['status'],
 					'action' => $response['action'],
 					'id' => $response['id'],
-					'product' => $item->name
+					'product' => $response_sku,
+					'lang' => $item->lang
 				));
 			} else {
 				array_push($finalResponse, array(
 					'status' => $response['status'],
 					'message' => $response['message'],
-					'product' => $item->name
+					'product' => $response_sku,
+					'lang' => $item->lang
 				));
 			}
 			$response = array();
@@ -1199,6 +1204,9 @@ class PpuAdmin
 				$productId = wc_get_product_id_by_sku($item->parent_product_sku);
 
 				$parentVariationId = null;
+
+				$variation_sku = $variation->sku;
+
 				$variationId = wc_get_product_id_by_sku($variation->sku);
 				if ($isParentVariation) {
 					// set to productID for parent product, or if translation, for child product
@@ -1273,13 +1281,15 @@ class PpuAdmin
 						'status' => $response['status'],
 						'action' => $response['action'],
 						'id' => $response['id'],
-						'product' => $variation->sku
+						'product' => $variation_sku,
+						'lang' => $variation->lang
 					));
 				} else {
 					array_push($finalResponse, array(
 						'status' => $response['status'],
 						'message' => $response['message'],
-						'product' => $variation->sku
+						'product' => $variation_sku,
+						'lang' => $variation->lang
 					));
 				}
 				$response = array();
