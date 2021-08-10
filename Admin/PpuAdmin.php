@@ -1398,6 +1398,7 @@ class PpuAdmin
 			}
 		}
 	}
+
 	/**
 	 * Upload handler: attribute terms
 	 */
@@ -1405,7 +1406,7 @@ class PpuAdmin
 	{
 		$finalResponse = array();
 
-		// get current attributes
+		// get all current attributes
 		$currentAttributes = wc_get_attribute_taxonomies();
 		$currentAttributesArray = array();
 		foreach ($currentAttributes as $attribute) {
@@ -1415,7 +1416,7 @@ class PpuAdmin
 			);
 		}
 
-		// get all terms per attribute
+		// get all terms per current attribute
 		$newCurrentTerms = array();
 		foreach ($currentAttributesArray as $attrKey => $attrValue) {
 			$attributeTerms = $this->getAllTermsForSlug($attrValue['slug']);
@@ -1637,20 +1638,8 @@ class PpuAdmin
 	 */
 	private function getFormattedArrayOfExistingItems($endpoint, $type)
 	{
-		$siteUrl = get_site_url();
-		$api = new Client(
-			$siteUrl,
-			get_option('ppu-wc-key'),
-			get_option('ppu-wc-secret'),
-			[
-				'wp_api' => true,
-				'version' => 'wc/v3'
-			]
-		);
-
-		$currentArrayItems = $api->get($endpoint, array(
-			'per_page' => 100
-		));
+		$api = $this->apiClient();
+		$currentArrayItems = $api->get($endpoint);
 
 		$currentArrayItemsSlugs = array_map(function ($e) {
 			return $e->slug;
@@ -1680,17 +1669,7 @@ class PpuAdmin
 			$endpoint = 'orders';
 		}
 
-		$siteUrl = get_site_url();
-
-		$api = new Client(
-			$siteUrl,
-			get_option('ppu-wc-key'),
-			get_option('ppu-wc-secret'),
-			[
-				'wp_api' => true,
-				'version' => 'wc/v3'
-			]
-		);
+		$api = $this->apiClient();
 		$result = $api->get($endpoint);
 
 		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
@@ -1707,17 +1686,7 @@ class PpuAdmin
 			$endpoint = 'products';
 		}
 
-		$siteUrl = get_site_url();
-
-		$api = new Client(
-			$siteUrl,
-			get_option('ppu-wc-key'),
-			get_option('ppu-wc-secret'),
-			[
-				'wp_api' => true,
-				'version' => 'wc/v3'
-			]
-		);
+		$api = $this->apiClient();
 		$result = $api->get($endpoint);
 
 		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
