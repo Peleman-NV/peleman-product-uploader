@@ -959,7 +959,11 @@ class PpuAdmin
 			if (isset($item->categories) && $item->categories != null) {
 				foreach ($item->categories as $category) {
 					if (!is_int($category->slug)) {
-						$category->id = get_term_by('slug', $category->slug, 'product_cat')->term_id ?? 'uncategorized';
+						$category->id = get_term_by('slug', $category->slug, 'product_cat')->term_id;
+						if ($category->id === null) {
+							$response['status'] = 'error';
+							$response['message'] = "Category $category->slug not found";
+						}
 					}
 				}
 			}
@@ -967,7 +971,11 @@ class PpuAdmin
 			if (isset($item->tags) && $item->tags != null) {
 				foreach ($item->tags as $tag) {
 					if (!is_int($tag->slug)) {
-						$tag->id = get_term_by('slug', $tag->slug, 'product_tag')->term_id ?? 'uncategorized';
+						$tag->id = get_term_by('slug', $tag->slug, 'product_tag')->term_id;
+						if ($tag->id === null) {
+							$response['status'] = 'error';
+							$response['message'] = "Tag $category->tag not found";
+						}
 					}
 				}
 			}
@@ -1028,6 +1036,7 @@ class PpuAdmin
 				} catch (\Throwable $th) {
 					$response['status'] = 'error';
 					$response['message'] = $th->getMessage();
+					$response['error_detail'] = json_decode($th->getResponse()->getBody(), true) ?? null;
 				}
 			}
 
@@ -1043,6 +1052,7 @@ class PpuAdmin
 				array_push($finalResponse, array(
 					'status' => $response['status'],
 					'message' => $response['message'],
+					'error_detail' => $response['error_detail'] ?? '',
 					'product' => $response_sku,
 					'lang' => $item->lang
 				));
@@ -1280,6 +1290,7 @@ class PpuAdmin
 					} catch (\Throwable $th) {
 						$response['status'] = 'error';
 						$response['message'] = $th->getMessage();
+						$response['error_detail'] = json_decode($th->getResponse()->getBody(), true) ?? null;
 					}
 				}
 				if ($response['status'] == 'success') {
@@ -1295,6 +1306,7 @@ class PpuAdmin
 						'status' => $response['status'],
 						'message' => $response['message'],
 						'product' => $variation_sku,
+						'error_detail' => $response['error_detail'] ?? '',
 						'lang' => $variation->lang
 					));
 				}
