@@ -1478,7 +1478,7 @@ class PpuAdmin
 						$response = (array) $api->post($endpoint, $item);
 						if ($item->menu_order > 0) $this->updateTermOrder($response['id'], $item->menu_order);
 					} else { // term exists
-						// for a translation, the WC endpoint it will edit the parent, not the translation.  This causes problems
+						// for a child/translation, the WC endpoint it will edit the parent, not the translation.  This causes problems
 						// if item is a child/translation - do the edit in a different way
 						if ($hasParentLanguage === true) { // if it's a translated/childItem, get the parent's details to link to parent
 							$this->updateExistingTranslatedTerm($foundTermId, $item);
@@ -1603,7 +1603,7 @@ class PpuAdmin
 		$joinTable = $wpdb->dbname . '.' . $wpdb->prefix . 'terms';
 
 		// get parent trid
-		$sql = "SELECT {$table}.term_taxonomy_id FROM {$table} INNER JOIN {$joinTable} on {$table}.term_id = {$joinTable}.term_id WHERE taxonomy = '{$attrName}' AND slug = '{$slug}'";
+		$sql = "SELECT {$table}.term_taxonomy_id, {$table}.term_id FROM {$table} INNER JOIN {$joinTable} on {$table}.term_id = {$joinTable}.term_id WHERE taxonomy = '{$attrName}' AND slug = '{$slug}'";
 		if (is_null($name)) {
 			$sql .= ";";
 		} else {
@@ -1615,7 +1615,7 @@ class PpuAdmin
 			return false;
 		}
 
-		return $result[0]->term_taxonomy_id;
+		return $result[0]->term_id;
 	}
 
 	private function getAllTermsForSlug($slug)
