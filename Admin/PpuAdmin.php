@@ -1207,8 +1207,29 @@ class PpuAdmin
 		$scriptTimerService = new ScriptTimerService();
 		$api = $this->apiClient();
 		$endpoint = 'products/attributes/';
-		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
 		$finalResponse = array();
+
+		// get all current attributes
+		$tempCurrentAttributes = wc_get_attribute_taxonomies();
+		$currentAttributesArray = array();
+		foreach ($tempCurrentAttributes as $attribute) {
+			$currentAttributesArray['pa_' . $attribute->attribute_name] = array(
+				'id' => $attribute->attribute_id,
+				'slug' => $attribute->attribute_name,
+			);
+		}
+
+		// get all terms per current attribute
+		$allTerms = array();
+		foreach ($currentAttributesArray as $attrKey => $attrValue) {
+			$attributeTerms = $this->getAllTermsForSlug($attrValue['slug']);
+			if (empty($attributeTerms)) continue;
+			foreach ($attributeTerms as $term) {
+				array_push($allTerms, $term->name);
+			}
+		}
+
+		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
 
 		// Products loop
 		foreach ($dataArray as $item) {
@@ -1253,12 +1274,26 @@ class PpuAdmin
 				$endpoint = 'products/' . $productId . '/variations/';
 
 				// Attributes loop
+				// get all product terms
+				$allProductTerms = [];
+				foreach ($currentAttributes['slugs'] as $attributeSlug) {
+					$termsPerAttribute = get_the_terms($productId, $attributeSlug);
+					if (empty($termsPerAttribute)) continue;
+					$allProductTerms = array_merge($allProductTerms, array_column($termsPerAttribute, 'name'));
+				}
+
 				if (isset($variation->attributes) && $variation->attributes != null) {
 					foreach ($variation->attributes as $variationAttribute) {
 						$attributeLookup = $this->getAttributeIdBySlug($variationAttribute->slug, $currentAttributes['attributes']);
 						if ($attributeLookup['result'] == 'error') {
 							$response['status'] = 'error';
 							$response['message'] = "Attribute {$attributeLookup['slug']} not found";
+						} else if (!in_array($variationAttribute->option, $allTerms)) {
+							$response['status'] = 'error';
+							$response['message'] = "Attribute term {$variationAttribute->option} not found";
+						} else if (!in_array($variationAttribute->option, $allProductTerms)) {
+							$response['status'] = 'error';
+							$response['message'] = "Attribute term {$variationAttribute->option} is not defined as a term for product SKU {$item->parent_product_sku}";
 						} else {
 							$variationAttribute->id = $attributeLookup['id'];
 						}
@@ -1440,7 +1475,7 @@ class PpuAdmin
 		}
 
 		// get all terms per current attribute
-		$newCurrentTerms = array();
+		$allTerms = array();
 		foreach ($currentAttributesArray as $attrKey => $attrValue) {
 			$attributeTerms = $this->getAllTermsForSlug($attrValue['slug']);
 
@@ -1454,7 +1489,7 @@ class PpuAdmin
 					'id' => $term->term_taxonomy_id,
 				);
 			}
-			$newCurrentTerms[$attrKey] = $tempArray;
+			$allTerms[$attrKey] = $tempArray;
 		}
 
 		$api = $this->apiClient();
