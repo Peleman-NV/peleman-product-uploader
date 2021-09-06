@@ -24,6 +24,15 @@ class PpuLoader
 	protected $filters;
 
 	/**
+	 * The array of shortcodes registered with WordPress.
+	 *
+	 * @since    1.0.0
+	 * @access   protected
+	 * @var      array    $shortcodes    The shortcodes registered with WordPress to fire when the plugin loads.
+	 */
+	protected $shortcodes;
+
+	/**
 	 * Initialize the collections used to maintain the actions and filters.
 	 *
 	 * @since    1.0.0
@@ -33,6 +42,7 @@ class PpuLoader
 
 		$this->actions = array();
 		$this->filters = array();
+		$this->shortcodes = array();
 	}
 
 	/**
@@ -106,6 +116,10 @@ class PpuLoader
 
 		foreach ($this->actions as $hook) {
 			add_action($hook['hook'], array($hook['component'], $hook['callback']), $hook['priority'], $hook['accepted_args']);
+		}
+
+		foreach ($this->shortcodes as $hook) {
+			add_shortcode($hook['hook'], array($hook['component'], $hook['callback']));
 		}
 	}
 }
