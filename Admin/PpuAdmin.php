@@ -1748,9 +1748,7 @@ class PpuAdmin
 		}
 
 		$api = $this->apiClient();
-		$result = $api->get($endpoint);
-
-		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
+		wp_send_json($api->get($endpoint), 200);
 	}
 
 	/**
@@ -1765,9 +1763,7 @@ class PpuAdmin
 		}
 
 		$api = $this->apiClient();
-		$result = $api->get($endpoint);
-
-		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
+		wp_send_json($api->get($endpoint), 200);
 	}
 
 	/**
@@ -1786,9 +1782,7 @@ class PpuAdmin
 		}
 
 		$api = $this->apiClient();
-		$result = $api->get($endpoint);
-
-		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
+		wp_send_json($api->get($endpoint), 200);
 	}
 
 	/**
