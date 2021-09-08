@@ -93,4 +93,18 @@
         </div>
         <button type="submit" class="button button-primary">Show it</button>
     </form>
+    <hr>
+    <h2>Show variation (temp dev function)</h2>
+    <form action="admin-post.php" method="POST">
+        <input type="hidden" name="action" value="show_variations">
+        <div class="form-row">
+            <div class="grid-medium-column">
+                <label for="order_id">Variation ID</label>
+            </div>
+            <div class="grid-large-column">
+                <input type="text" id="variation_id" name="variation_id">
+            </div>
+        </div>
+        <button type="submit" class="button button-primary">Show it</button>
+    </form>
 </div>

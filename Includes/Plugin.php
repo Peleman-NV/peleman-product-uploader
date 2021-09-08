@@ -94,6 +94,7 @@ class Plugin
 
 		$this->loader->add_action('admin_post_show_orders', $plugin_admin, 'showOrders');
 		$this->loader->add_action('admin_post_show_products', $plugin_admin, 'showProducts');
+		$this->loader->add_action('admin_post_show_variations', $plugin_admin, 'showVariations');
 
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetAttributesEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetCategoriesEndpoint');

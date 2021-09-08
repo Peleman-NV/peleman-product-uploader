@@ -1753,6 +1753,27 @@ class PpuAdmin
 	}
 
 	/**
+	 * Show one variation
+	 */
+	public function showVariations()
+	{
+		if (isset($_POST['variation_id']) && $_POST['variation_id'] != '') {
+			$variationId = $_POST['variation_id'];
+			$variation = wc_get_product($variationId);
+			$product = wc_get_product($variation->get_parent_id());
+			$endpoint = 'products/' . $product->get_id() . "/variations/" . $_POST['variation_id'];
+		} else {
+			print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r(['result' => 'no variation found'], true) . '</pre>');
+			die();
+		}
+
+		$api = $this->apiClient();
+		$result = $api->get($endpoint);
+
+		print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r($result, true) . '</pre>');
+	}
+
+	/**
 	 * Disable image downscaling - this add the word "scaled" to images - return false to disable
 	 */
 	public function disableImageDownscaling()
