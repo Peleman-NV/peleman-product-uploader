@@ -1020,6 +1020,14 @@ class PpuAdmin
 				}
 			}
 
+			// handle up- & cross-sell products
+			if ($item->upsell_skus !== null) {
+				$item->upsell_ids = $this->get_product_ids_for_sku_array($item->upsell_skus);
+			}
+			if ($item->cross_sell_skus !== null) {
+				$item->cross_sell_ids = $this->get_product_ids_for_sku_array($item->cross_sell_skus);
+			}
+
 			if (!isset($response['status'])) {
 				try {
 					if ($isNewProduct) {
@@ -1062,6 +1070,16 @@ class PpuAdmin
 		$scriptTimerService->stopAndLogDuration(__FUNCTION__, __DIR__);
 
 		wp_send_json($finalResponse, 200);
+	}
+
+	private function get_product_ids_for_sku_array($skuArray)
+	{
+		$productIdArray = [];
+		foreach ($skuArray as $sku) {
+			array_push($productIdArray, wc_get_product_id_by_sku($sku));
+		}
+
+		return $productIdArray;
 	}
 
 	/**
