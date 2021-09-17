@@ -1028,6 +1028,30 @@ class PpuAdmin
 				$item->cross_sell_ids = $this->get_product_ids_for_sku_array($item->cross_sell_skus);
 			}
 
+			// handle videos
+			if ($item->videos !== null && !empty($item->videos)) {
+				$iterator = 0;
+				$nrOfVideos = count($item->videos);
+				$videoJsonStringArray = [];
+				foreach ($item->videos as $video) {
+					$youTubeId = $this->createGetParamArray($video->youtube_url)['v'];
+					$response = $this->downloadYouTubeThumbnailAsWpAttachment($youTubeId, $video->title);
+					if ($response['result'] === 'success') {
+						$attachmentId = $response['data'];
+						$videoJsonStringArray[] = $this->createJsonStringForVideo($iterator, $attachmentId, $video->title, $video->youtube_url);
+					} else {
+						$response['status'] = 'error';
+						$response['message'] = $response['message'];
+					}
+					$iterator++;
+				}
+				$response = $this->addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId);
+				if ($response === false) {
+					$response['status'] = 'error';
+					$response['message'] = 'Could not add video to product';
+				}
+			}
+
 			if (!isset($response['status'])) {
 				try {
 					if ($isNewProduct) {
@@ -1070,6 +1094,102 @@ class PpuAdmin
 		$scriptTimerService->stopAndLogDuration(__FUNCTION__, __DIR__);
 
 		wp_send_json($finalResponse, 200);
+	}
+
+	private function createGetParamArray($url)
+	{
+		$getParams = substr($url, strpos($url, '?') + 1);
+		$paramArray = explode('&', $getParams);
+
+		$getParamArray = [];
+		foreach ($paramArray as $param) {
+			$explodedParam = explode('=', $param);
+			$getParamArray[$explodedParam[0]] = $explodedParam[1];
+		}
+		return $getParamArray;
+	}
+
+	private function downloadYouTubeThumbnailAsWpAttachment($videoId, $title)
+	{
+		require_once(ABSPATH . 'wp-admin/includes/media.php');
+		require_once(ABSPATH . 'wp-admin/includes/file.php');
+		require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+		$youtubeImageFormatArray = [
+			'maxresdefault',
+			'sddefault',
+			'hqdefault',
+			'mqdefault',
+		];
+		$extension = 'jpg';
+		$youtubeUrl = 'https://img.youtube.com/vi/' . $videoId . '/';
+
+		foreach ($youtubeImageFormatArray as $imageFormat) {
+			$imageUrl = $youtubeUrl . $imageFormat . '.' . $extension;
+			try {
+				$uploadResponse = media_sideload_image($imageUrl, 0, $title, 'id');
+				if (is_int($uploadResponse)) {
+					$response['result'] = 'success';
+					$response['data'] = $uploadResponse;
+					break;
+				} else {
+					throw new \Exception("Could not fetch YouTube thumbnail for url {$imageUrl}");
+				}
+			} catch (\Throwable $th) {
+				$response['message'] = $th->getMessage();
+			}
+		}
+
+		return $response;
+	}
+
+	private function addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId)
+	{
+		global $wpdb;
+
+		$finalJsonString = 'a:' . $nrOfVideos . ':{' . implode('', $videoJsonStringArray) . '}';
+		$result = $wpdb->insert(
+			$wpdb->prefix . 'postmeta',
+			[
+				'post_id' => $productId,
+				'meta_key' => '_ywcfav_video',
+				'meta_value' => $finalJsonString
+			]
+		);
+
+		if ($result > 0) {
+			return true;
+		}
+
+		return false;
+	}
+
+	private function createJsonStringForVideo($iterator, $attachmentId, $title, $youTubeVideoUrl)
+	{
+		$jsonId = 'ywcfav_video_id-' . $this->generateRandomString(11);
+
+		return 'i:' . $iterator . ';a:7:{s:6:"thumbn";s:' . strlen((string)$attachmentId) . ':"'
+			. $attachmentId
+			. '";s:2:"id";s:' . strlen($jsonId)
+			. ':"'
+			. $jsonId
+			. '";s:4:"type";s:3:"url";s:8:"featured";s:2:"no";s:4:"name";s:' . strlen($title) . ':"'
+			. $title
+			. '";s:4:"host";s:7:"youtube";s:7:"content";s:' . strlen($youTubeVideoUrl) . ':"'
+			. $youTubeVideoUrl
+			. '";}';
+	}
+
+	private function generateRandomString($length)
+	{
+		$characters = '0123456789abcdefghijklmnopqrstuvwxyz';
+		$randomString = '';
+		for ($i = 0; $i < $length; $i++) {
+			$index = rand(0, strlen($characters) - 1);
+			$randomString .= $characters[$index];
+		}
+
+		return $randomString;
 	}
 
 	private function get_product_ids_for_sku_array($skuArray)
