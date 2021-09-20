@@ -1343,8 +1343,6 @@ class PpuAdmin
 	private function handleProductVariations($dataArray)
 	{
 		$scriptTimerService = new ScriptTimerService();
-		$api = $this->apiClient();
-		$endpoint = 'products/attributes/';
 		$finalResponse = array();
 
 		// get all current attributes
@@ -1366,47 +1364,57 @@ class PpuAdmin
 				array_push($allTerms, $term->name);
 			}
 		}
-
-		$currentAttributes = $this->getFormattedArrayOfExistingItems($endpoint, 'attributes');
+		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 
 		// Products loop
 		foreach ($dataArray as $item) {
-
 			// Variations loop
 			foreach ($item->variations as $variation) {
-				// is it a parent variation?
-				$isParentVariation = empty($variation->lang);
-				$productId = wc_get_product_id_by_sku($item->parent_product_sku);
+				$isParentVariation = empty($variation->lang); // no lang means default language & thus parent
+				$productId =
+					$isParentVariation ?
+					wc_get_product_id_by_sku($item->parent_product_sku) :
+					apply_filters('wpml_object_id', wc_get_product_id_by_sku($item->parent_product_sku), 'post', TRUE, $variation->lang);
 
-				$parentVariationId = null;
+				$parentVariationId = wc_get_product_id_by_sku($variation->sku);
+				// $childVariationId = apply_filters('wpml_object_id', $parentVariationId, 'post', true, $variation->lang);
+				$childVariationId = apply_filters('wpml_object_id', $parentVariationId, 'post', false, $variation->lang);
+
+				// error_log(
+				// 	__FILE__ . ': ' . __LINE__ . ' ' . print_r(
+				// 		[
+				// 			'variationSku' => $variation->sku,
+				// 			'lang' => $variation->lang,
+				// 			'parentProductId'	=> wc_get_product_id_by_sku($item->parent_product_sku),
+				// 			'childProductId' => apply_filters('wpml_object_id', wc_get_product_id_by_sku($item->parent_product_sku), 'post', TRUE, $variation->lang),
+				// 			'parentVariationId' => wc_get_product_id_by_sku($variation->sku),
+				// 			'defaultVarId' => apply_filters('wpml_object_id', $parentVariationId, 'post', TRUE, ''),
+				// 			'thisLangVarId' => apply_filters('wpml_object_id', $parentVariationId, 'post', TRUE, $variation->lang)
+				// 		],
+				// 		true
+				// 	) . PHP_EOL,
+				// 	3,
+				// 	__DIR__ .
+				// 		'/variationUploadLog.txt'
+				// );
 
 				$variation_sku = $variation->sku;
-
-				$variationId = wc_get_product_id_by_sku($variation->sku);
-				if ($isParentVariation) {
-					// set to productID for parent product, or if translation, for child product
-					$isNewVariation = ($variationId === 0 || $variationId === null);
-				} else {
-					// if it's a translation, get childProductID for endpoint, not parentProductId
-					$productId = apply_filters('wpml_object_id', $productId, 'post', TRUE, $variation->lang);
-
-					$parentVariationId = $variationId;
-					if ($parentVariationId === null || $parentVariationId === 0) {
+				// given the variant ID's, is it a new or existing variant?
+				$noParentVariationFound = $parentVariationId === 0 || $parentVariationId === null;
+				$isNewVariation = $noParentVariationFound;
+				if (!$isParentVariation) { // =child (other language than English)
+					if ($noParentVariationFound) {
 						$response['status'] = 'error';
-						$response['message'] = "Parent product not found (you are trying to upload a translated variation, but I can't find its default language counterpart)";
+						$response['message'] = "Parent variation not found (you are trying to upload a translated variation, but I can't find its default language counterpart)";
 					}
 
-					// this returns the parent ID if no child is found
-					$variationId = apply_filters('wpml_object_id', $parentVariationId, 'post', TRUE, $variation->lang);
+					unset($variation->sku); // clear SKU for child/translated products to avoid 'duplicate SKU' errors					
+					$variation->translation_of = $parentVariationId; // set variation as translation of the parent
 
-					$isNewVariation = $parentVariationId === $variationId;
-					if ($isNewVariation) {
-						unset($variationId);
-					}
-					// clear SKU for translated products to avoid 'duplicate SKU' errors
-					unset($variation->sku);
-					// set product as translation of the parent
-					$variation->translation_of = $parentVariationId;
+					// apply_filters('wpml_object_id' ... returns the existing translated item, or the parent item 
+					// If child === null, child does not exist yet
+					//$isNewVariation = $parentVariationId === $childVariationId;
+					$isNewVariation = $childVariationId === null;
 				}
 
 				$endpoint = 'products/' . $productId . '/variations/';
@@ -1419,7 +1427,6 @@ class PpuAdmin
 					if (empty($termsPerAttribute)) continue;
 					$allProductTerms = array_merge($allProductTerms, array_column($termsPerAttribute, 'name'));
 				}
-
 				if (isset($variation->attributes) && $variation->attributes != null) {
 					foreach ($variation->attributes as $variationAttribute) {
 						$attributeLookup = $this->getAttributeIdBySlug($variationAttribute->slug, $currentAttributes['attributes']);
@@ -1438,6 +1445,7 @@ class PpuAdmin
 					}
 				}
 
+				// handle images
 				if (isset($variation->image) && $variation->image != null) {
 
 					$imageId = $this->getImageIdByName($variation->image);
@@ -1451,15 +1459,25 @@ class PpuAdmin
 
 				if (!isset($response['status'])) {
 					try {
-						if ($variationId != 0 || $variationId != null) {
-							$response = (array) $api->put($endpoint . $variationId, $variation);
-							$response['status'] = 'success';
-							$response['action'] = 'modify variation';
-						} else {
+						$api = $this->apiClient();
+						if ($isNewVariation) {
+							// create new
 							$response = (array) $api->post($endpoint, $variation);
 							$response['status'] = 'success';
 							$response['action'] = 'create variation';
+						} else {
+							// edit existing
+							$endpoint .= $isParentVariation ? $parentVariationId : $childVariationId;
+							$response = (array) $api->put($endpoint, $variation);
+							$response['status'] = 'success';
+							$response['action'] = 'modify variation';
 						}
+						// error_log(
+						// 	print_r($response['action'] . ': ' . $endpoint, true) . PHP_EOL,
+						// 	3,
+						// 	__DIR__ .
+						// 		'/variationUploadLog.txt'
+						// );
 					} catch (\Throwable $th) {
 						$response['status'] = 'error';
 						$response['message'] = $th->getMessage();
@@ -1483,6 +1501,15 @@ class PpuAdmin
 						'lang' => $variation->lang
 					));
 				}
+				// error_log(
+				// 	print_r(
+				// 		'Action: ' . $response['action'] . PHP_EOL . $response['status'] . $response['message'],
+				// 		true
+				// 	) . PHP_EOL,
+				// 	3,
+				// 	__DIR__ .
+				// 		'/variationUploadLog.txt'
+				// );
 				$response = array();
 			}
 		}
