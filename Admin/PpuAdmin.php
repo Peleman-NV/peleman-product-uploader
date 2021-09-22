@@ -1371,32 +1371,14 @@ class PpuAdmin
 			// Variations loop
 			foreach ($item->variations as $variation) {
 				$isParentVariation = empty($variation->lang); // no lang means default language & thus parent
+				$parentProductId = wc_get_product_id_by_sku($item->parent_product_sku);
 				$productId =
 					$isParentVariation ?
 					wc_get_product_id_by_sku($item->parent_product_sku) :
 					apply_filters('wpml_object_id', wc_get_product_id_by_sku($item->parent_product_sku), 'post', TRUE, $variation->lang);
 
 				$parentVariationId = wc_get_product_id_by_sku($variation->sku);
-				// $childVariationId = apply_filters('wpml_object_id', $parentVariationId, 'post', true, $variation->lang);
 				$childVariationId = apply_filters('wpml_object_id', $parentVariationId, 'post', false, $variation->lang);
-
-				// error_log(
-				// 	__FILE__ . ': ' . __LINE__ . ' ' . print_r(
-				// 		[
-				// 			'variationSku' => $variation->sku,
-				// 			'lang' => $variation->lang,
-				// 			'parentProductId'	=> wc_get_product_id_by_sku($item->parent_product_sku),
-				// 			'childProductId' => apply_filters('wpml_object_id', wc_get_product_id_by_sku($item->parent_product_sku), 'post', TRUE, $variation->lang),
-				// 			'parentVariationId' => wc_get_product_id_by_sku($variation->sku),
-				// 			'defaultVarId' => apply_filters('wpml_object_id', $parentVariationId, 'post', TRUE, ''),
-				// 			'thisLangVarId' => apply_filters('wpml_object_id', $parentVariationId, 'post', TRUE, $variation->lang)
-				// 		],
-				// 		true
-				// 	) . PHP_EOL,
-				// 	3,
-				// 	__DIR__ .
-				// 		'/variationUploadLog.txt'
-				// );
 
 				$variation_sku = $variation->sku;
 				// given the variant ID's, is it a new or existing variant?
@@ -1411,9 +1393,6 @@ class PpuAdmin
 					unset($variation->sku); // clear SKU for child/translated products to avoid 'duplicate SKU' errors					
 					$variation->translation_of = $parentVariationId; // set variation as translation of the parent
 
-					// apply_filters('wpml_object_id' ... returns the existing translated item, or the parent item 
-					// If child === null, child does not exist yet
-					//$isNewVariation = $parentVariationId === $childVariationId;
 					$isNewVariation = $childVariationId === null;
 				}
 
@@ -1423,7 +1402,7 @@ class PpuAdmin
 				// get all product terms
 				$allProductTerms = [];
 				foreach ($currentAttributes['slugs'] as $attributeSlug) {
-					$termsPerAttribute = get_the_terms($productId, $attributeSlug);
+					$termsPerAttribute = get_the_terms($parentProductId, $attributeSlug);
 					if (empty($termsPerAttribute)) continue;
 					$allProductTerms = array_merge($allProductTerms, array_column($termsPerAttribute, 'name'));
 				}
