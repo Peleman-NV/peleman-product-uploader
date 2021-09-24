@@ -1371,7 +1371,6 @@ class PpuAdmin
 			// Variations loop
 			foreach ($item->variations as $variation) {
 				$isParentVariation = empty($variation->lang); // no lang means default language & thus parent
-				$parentProductId = wc_get_product_id_by_sku($item->parent_product_sku);
 				$productId =
 					$isParentVariation ?
 					wc_get_product_id_by_sku($item->parent_product_sku) :
@@ -1402,6 +1401,7 @@ class PpuAdmin
 				// get all product terms
 				$allProductTerms = [];
 				foreach ($currentAttributes['slugs'] as $attributeSlug) {
+					$parentProductId = wc_get_product_id_by_sku($item->parent_product_sku);
 					$termsPerAttribute = get_the_terms($parentProductId, $attributeSlug);
 					if (empty($termsPerAttribute)) continue;
 					$allProductTerms = array_merge($allProductTerms, array_column($termsPerAttribute, 'name'));
