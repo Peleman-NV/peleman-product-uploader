@@ -901,59 +901,42 @@ class PpuAdmin
 	}
 
 	/**
-	 * Upload handler: products
+	 * Handles a product upload using the WC REST API
+	 *
+	 * @param array $dataArray
+	 * @return string
 	 */
 	private function handleProducts($dataArray)
 	{
 		$scriptTimerService = new ScriptTimerService();
-		$api = $this->apiClient();
 		$endpoint = 'products/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 		$finalResponse = array();
 		$response = array();
 
 		foreach ($dataArray as $item) {
-			// set reviews to false
-			$item->reviews_allowed = 0;
-
-			// parent or translation
-			$isParentProduct = empty($item->lang);
-
+			$item->reviews_allowed = 0; // set reviews to false
+			$isParentProduct = empty($item->lang); // parent or translation?
 			$productId = wc_get_product_id_by_sku($item->sku);
-			$parentProductId = null;
+			$isNewProduct = ($productId === 0 || $productId === null);
 			$childProductId = null;
 			$isNewProduct = false;
 
 			// save the sku for the response 
 			$response_sku = $item->sku;
 
-			// if it's a parent, check if it exists
-			if ($isParentProduct) { // 
-				// if wc_get_product_id_by_sku returns an id -> existing product: "update", else new product: "create"
-				$isNewProduct = ($productId === 0 || $productId === null);
-				// if it's a parent -> the product ID IS the product ID 
-				$parentProductId = $productId;
-			} else {
-				// if it's a child -> the parent ID IS the product ID 
-				$parentProductId = $productId;
-				if ($parentProductId === null || $parentProductId === 0) {
+			if (!$isParentProduct) { // 
+				if ($productId === null || $productId === 0) {
 					$response['status'] = 'error';
 					$response['message'] = "Parent product not found (you are trying to upload a translated product, but I can't find its default language counterpart)";
 				}
-
 				// get the child's product ID
-				$childProductId = apply_filters('wpml_object_id', $parentProductId, 'post', false, $item->lang);
-
-				// if it's a child, we know the parentProductId - does the translatedProductId exist?
-				$isNewProduct = ($childProductId === 0 || $childProductId === null);
-
-				// clear SKU for translated/child products to avoid 'duplicate SKU' errors - woocommerce sets this itself
-				unset($item->sku);
-				// set product as translation of the parent
-				$item->translation_of = $parentProductId;
+				$childProductId = apply_filters('wpml_object_id', $productId, 'post', false, $item->lang);
+				$isNewProduct = ($childProductId === 0 || $childProductId === null); // if child, does the translatedProductId exist?
+				if ($childProductId !== null) $productId = $childProductId; // if child exists, work with it
+				unset($item->sku); // clear SKU to avoid 'duplicate SKU' errors
+				$item->translation_of = $productId; // set product as translation of the parent
 			}
-			// if child is null, product ID = parentId, else product ID = child ID
-			$productId = $childProductId === null ? $parentProductId : $childProductId;
 
 			// get id's for all categories, tags, attributes, and images.
 			if (isset($item->categories) && $item->categories != null) {
@@ -1054,6 +1037,7 @@ class PpuAdmin
 
 			if (!isset($response['status'])) {
 				try {
+					$api = $this->apiClient();
 					if ($isNewProduct) {
 						// this logic route creates a product ID
 						$response = (array) $api->post($endpoint, $item);
@@ -1096,6 +1080,12 @@ class PpuAdmin
 		wp_send_json($finalResponse, 200);
 	}
 
+	/**
+	 * Extracts GET parameters from a URL and returns them as an associative array
+	 *
+	 * @param string $url
+	 * @return array
+	 */
 	private function createGetParamArray($url)
 	{
 		$getParams = substr($url, strpos($url, '?') + 1);
@@ -1109,6 +1099,15 @@ class PpuAdmin
 		return $getParamArray;
 	}
 
+	/**
+	 * Downloads a YouTube thumbnail as a WordPres attachment
+	 * 
+	 * YouTube video thumbnails come in 4 formats.  This function tries to download the highest quality first and falls back to lower quality files until one is found
+	 *
+	 * @param string $videoId
+	 * @param string $title
+	 * @return string
+	 */
 	private function downloadYouTubeThumbnailAsWpAttachment($videoId, $title)
 	{
 		require_once(ABSPATH . 'wp-admin/includes/media.php');
@@ -1143,6 +1142,14 @@ class PpuAdmin
 		return $response;
 	}
 
+	/**
+	 * Writes the video JSON string to wp_postmeta
+	 *
+	 * @param int $nrOfVideos
+	 * @param array $videoJsonStringArray
+	 * @param int $productId
+	 * @return boolean
+	 */
 	private function addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId)
 	{
 		global $wpdb;
@@ -1164,6 +1171,15 @@ class PpuAdmin
 		return false;
 	}
 
+	/**
+	 * Creates a YITH JSON string for a YouTube video
+	 *
+	 * @param int $iterator
+	 * @param int $attachmentId
+	 * @param string $title
+	 * @param string $youTubeVideoUrl
+	 * @return string
+	 */
 	private function createJsonStringForVideo($iterator, $attachmentId, $title, $youTubeVideoUrl)
 	{
 		$jsonId = 'ywcfav_video_id-' . $this->generateRandomString(11);
@@ -1180,6 +1196,12 @@ class PpuAdmin
 			. '";}';
 	}
 
+	/**
+	 * Generates a random string for a given length
+	 *
+	 * @param int $length
+	 * @return string
+	 */
 	private function generateRandomString($length)
 	{
 		$characters = '0123456789abcdefghijklmnopqrstuvwxyz';
@@ -1192,6 +1214,12 @@ class PpuAdmin
 		return $randomString;
 	}
 
+	/**
+	 * Given an array of SKU's, it returns an array of product Id's
+	 *
+	 * @param array $skuArray
+	 * @return array
+	 */
 	private function get_product_ids_for_sku_array($skuArray)
 	{
 		$productIdArray = [];
@@ -1400,8 +1428,8 @@ class PpuAdmin
 				// Attributes loop
 				// get all product terms
 				$allProductTerms = [];
+				$parentProductId = wc_get_product_id_by_sku($item->parent_product_sku);
 				foreach ($currentAttributes['slugs'] as $attributeSlug) {
-					$parentProductId = wc_get_product_id_by_sku($item->parent_product_sku);
 					$termsPerAttribute = get_the_terms($parentProductId, $attributeSlug);
 					if (empty($termsPerAttribute)) continue;
 					$allProductTerms = array_merge($allProductTerms, array_column($termsPerAttribute, 'name'));
@@ -1451,12 +1479,6 @@ class PpuAdmin
 							$response['status'] = 'success';
 							$response['action'] = 'modify variation';
 						}
-						// error_log(
-						// 	print_r($response['action'] . ': ' . $endpoint, true) . PHP_EOL,
-						// 	3,
-						// 	__DIR__ .
-						// 		'/variationUploadLog.txt'
-						// );
 					} catch (\Throwable $th) {
 						$response['status'] = 'error';
 						$response['message'] = $th->getMessage();
@@ -1480,15 +1502,6 @@ class PpuAdmin
 						'lang' => $variation->lang
 					));
 				}
-				// error_log(
-				// 	print_r(
-				// 		'Action: ' . $response['action'] . PHP_EOL . $response['status'] . $response['message'],
-				// 		true
-				// 	) . PHP_EOL,
-				// 	3,
-				// 	__DIR__ .
-				// 		'/variationUploadLog.txt'
-				// );
 				$response = array();
 			}
 		}
