@@ -619,7 +619,7 @@ class PpuAdmin
 	public function postMenu($request)
 	{
 		$data = json_decode($request->get_body());
-		$this->handleMenuUpload($data);
+		$this->handleMenuUpload($data->menu);
 	}
 
 	public function uploadMenuViaForm()
@@ -629,86 +629,71 @@ class PpuAdmin
 		$jsonData = file_get_contents($_FILES['ppu-upload']['tmp_name']);
 		$data = json_decode($jsonData);
 
-		$this->handleMenuUpload($data);
+		$this->handleMenuUpload($data->menu);
 	}
 
-	private function createMenuContainer($menu_name)
-	{
-		if (empty($menu_name)) return false;
-
-		$uniqueMenuName = $menu_name . '_' . time();
-		$menuId = wp_create_nav_menu($uniqueMenuName);
-
-		if (isset($menuId->errors)) {
-			return false;
-		}
-		return ['menu_id' => $menuId, 'menu_name' => $uniqueMenuName];
-	}
-
-	public function handleMenuUpload($data)
+	/**
+	 * Creates a WordPress menu
+	 *
+	 * @param object $data
+	 * @return string
+	 */
+	public function handleMenuUpload($menu)
 	{
 		$response = [];
-
 		$createdMenus = [];
-		foreach ($data->menus as $menu) {
-			if ($createdMenu = $this->createMenuContainer($menu->menu_name)) {
-				$menuId = $createdMenu['menu_id'];
-				$menuName = $createdMenu['menu_name'];
-				if ($menu->lang === '') $createdMenus[] = ['id' => $menuId, 'name' => $menu->menu_name, 'lang' => 'en'];
-				if ($menu->lang !== '') $createdMenus[] = ['id' => $menuId, 'name' => $menu->menu_name, 'lang' => $menu->lang];
-			} else {
-				$response[$menu->menu_name]['status'] = 'error';
-				$response[$menu->menu_name]['message'] = "Error creating menu container";
+		if ($createdMenu = $this->createMenuContainer($menu->name)) { // create menu container
+			$menuId = $createdMenu['menu_id'];
+			$menuName = $createdMenu['name'];
+			if ($menu->lang === '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => 'en'];
+			if ($menu->lang !== '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => $menu->lang];
+		} else {
+			$response['status'] = 'error';
+			$response['message'] = "Error creating menu container";
+			wp_send_json($response, 400);
+		}
+
+		$parentItems = array_filter($menu->items, function ($item) {
+			return $item->parent_menu_item_name === '';
+		});
+		$childItems = array_filter($menu->items, function ($item) {
+			return $item->parent_menu_item_name !== '';
+		});
+
+		foreach ($parentItems as $parent) { // create parent menu items
+			if (!is_int($parent->position) && empty($parent->position)) {
+				$response['status'] = 'error';
+				$response['message'] = "Position is missing for {$parent->menu_item_name}";
 				wp_send_json($response, 400);
 			}
-
-			$parentItems = array_filter($menu->items, function ($item) {
-				return $item->parent_menu_item_name === '';
-			});
-			$childItems = array_filter($menu->items, function ($item) {
-				return $item->parent_menu_item_name !== '';
-			});
-
-			foreach ($parentItems as $item) {
-				if (!is_int($this->create_menu_item($menuId, $item))) {
-					$response[$menu->menu_name]['status'] = 'error';
-					$response[$menu->menu_name]['message'] = "Problem creating parent item";
-					$response[$menu->menu_name]['menu_item_name'] = $item->menu_item_name;
-					break;
-				}
-			}
-
-			while (!empty($childItems)) {
-				$currentNumberOfChildItems = count($childItems);
-
-				$currentMenuItems = wp_get_nav_menu_items($menuName);
-				foreach ($childItems as $key => $item) {
-					// if parent is found: get parentID, create item, and remove from array
-					if (in_array($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))) {
-						$parentItem = $currentMenuItems[array_search($item->parent_menu_item_name, array_column($currentMenuItems, 'title'))];
-						$item->parentId = $parentItem->ID;
-
-						if (!is_int($this->create_menu_item($menuId, $item, $item->parentId))) {
-							$response[$menu->menu_name]['status'] = 'error';
-							$response[$menu->menu_name]['message'] = "Problem creating child item";
-							$response[$menu->menu_name]['menu_item_name'] = $item->menu_item_name;
-							break;
-						}
-
-						unset($childItems[$key]);
-					}
-				}
-				$newCurrentNumberOfChildItems = count($childItems);
-
-				if ($newCurrentNumberOfChildItems === $currentNumberOfChildItems) {
-					$response[$menu->menu_name]['status'] = 'error';
-					$response[$menu->menu_name]['message'] = "Error creating item(s)";
-					$response[$menu->menu_name]['items'] = array_values($childItems);
-					break;
-				}
+			if (!is_int($this->create_menu_item($menuId, $parent))) {
+				$response['status'] = 'error';
+				$response['message'] = "Problem creating parent item";
+				$response['menu_item_name'] = $parent->menu_item_name;
+				break;
 			}
 		}
 
+		$currentMenuItems = wp_get_nav_menu_items($menuName);
+		$formattedCurrentMenuItemsArray = [];
+		foreach ($currentMenuItems as $menuItem) {
+			$formattedCurrentMenuItemsArray[$menuItem->title] = $menuItem->ID;
+		}
+
+		foreach ($childItems as $child) { // create child menu items
+			if (!is_int($child->position) && empty($child->position)) {
+				$response['status'] = 'error';
+				$response['message'] = "Position is missing for {$child->menu_item_name}";
+				wp_send_json($response, 400);
+			}
+			$parentId = $formattedCurrentMenuItemsArray[$child->parent_menu_item_name];
+			if (!is_int($this->create_menu_item($menuId, $child, $parentId))) {
+				$response['status'] = 'error';
+				$response['message'] = "Problem creating child item";
+				$response['menu_item_name'] = $child->menu_item_name;
+				break;
+			}
+		}
 		$this->joinCreatedMenus($createdMenus);
 
 		foreach ($response as $key => $value) {
@@ -723,6 +708,25 @@ class PpuAdmin
 		$response['menus'] = $createdMenus;
 
 		wp_send_json($response, 200);
+	}
+
+	/**
+	 * Creates a menu container (in wp_terms table)
+	 *
+	 * @param object $menu_name
+	 * @return array
+	 */
+	private function createMenuContainer($name)
+	{
+		if (empty($name)) return false;
+
+		$uniqueMenuName = $name . '_' . time();
+		$menuId = wp_create_nav_menu($uniqueMenuName);
+
+		if (isset($menuId->errors)) {
+			return false;
+		}
+		return ['menu_id' => $menuId, 'name' => $uniqueMenuName];
 	}
 
 	private function joinCreatedMenus($menuArray)
@@ -770,65 +774,61 @@ class PpuAdmin
 		}
 	}
 
+	/**
+	 * Creates a menu item
+	 *
+	 * @param int $menuId
+	 * @param object $item
+	 * @param integer $parentId
+	 * @return void
+	 */
 	private function create_menu_item($menuId, $item, $parentId = 0)
 	{
-		if (!empty($item->category_slug) && empty($item->custom_url) && empty($item->product_sku)) {
-			$term = get_term_by('slug', $item->category_slug, 'product_cat');
+		$menuObject = [
+			'menu-item-position' => $item->position,
+			'menu-item-status' => 'publish',
+			'menu-item-parent-id' => $parentId,
+			'menu-item-title' => $item->menu_item_name, // display name
+			'menu-item-attr-title' => $item->menu_item_name, // css title attribute
+		];
 
+		if (!empty($item->category_slug) && empty($item->custom_url) && empty($item->product_sku)) {
+			// category menu item
+			$term = get_term_by('slug', $item->category_slug, 'product_cat');
 			if ($term === false) {
 				$response['status'] = 'error';
 				$response['message'] = "Error finding existing category";
 				$response['menu_item_name'] = $item->menu_item_name;
-				$response['category_slug'] = $item->category_slug;
+				$response['item'] = $item->category_slug;
 				wp_send_json($response, 400);
 			}
 
-			$menuObject = [
-				'menu-item-type'			=> 'taxonomy',
-				'menu-item-object'			=> $term->taxonomy,
-				'menu-item-object-id'		=> $term->term_id,
-				'menu-item-title'			=> $item->menu_item_name, // display name
-				'menu-item-position'	    => $item->position,
-				'menu-item-attr-title'      => $item->menu_item_name, // css title attribute
-				'menu-item-parent-id' 	    => $parentId,
-				'menu-item-status'			=> 'publish',
-			];
-		} else if (empty($item->category_slug) && !empty($item->custom_url) && empty($item->product_sku)) {
-			$menuObject = [
-				'menu-item-type'          => 'custom',
-				'menu-item-position'      => $item->position,
-				'menu-item-title'		  => $item->menu_item_name, // display name
-				'menu-item-url'           => $item->custom_url,
-				'menu-item-attr-title'    => $item->menu_item_name, // css title attribute
-				'menu-item-parent-id'     => $parentId,
-				'menu-item-status'        => 'publish'
-			];
+			$menuObject['menu-item-type'] = 'taxonomy';
+			$menuObject['menu-item-object'] = $term->taxonomy;
+			$menuObject['menu-item-object-id'] = $term->term_id;
 		} else if (empty($item->category_slug) && empty($item->custom_url) && !empty($item->product_sku)) {
+			// product menu item
 			$productId = wc_get_product_id_by_sku($item->product_sku);
-
 			if ($productId === 0) {
 				$response['status'] = 'error';
 				$response['message'] = "Error finding product";
 				$response['menu_item_name'] = $item->menu_item_name;
-				$response['category_slug'] = $item->product_sku;
+				$response['item'] = $item->product_sku;
 				wp_send_json($response, 400);
 			}
 
-			$menuObject = [
-				'menu-item-type'          => 'post_type',
-				'menu-item-object'		  => 'product',
-				'menu-item-object-id'	  => $productId,
-				'menu-item-title'		  => $item->menu_item_name, // display name
-				'menu-item-position'      => $item->position,
-				'menu-item-attr-title'    => $item->menu_item_name, // css title attribute
-				'menu-item-parent-id'     => $parentId,
-				'menu-item-status'        => 'publish',
-			];
+			$menuObject['menu-item-type'] = 'post_type';
+			$menuObject['menu-item-object'] = 'product';
+			$menuObject['menu-item-object-id'] = $productId;
+		} else if (empty($item->category_slug) && !empty($item->custom_url) && empty($item->product_sku)) {
+			// custom menu item
+			$menuObject['menu-item-type'] = 'custom';
+			$menuObject['menu-item-url'] = $item->custom_url;
 		} else {
 			$response['status'] = 'error';
 			$response['message'] = "Error defining menu item type";
 			$response['menu_item_name'] = $item->menu_item_name;
-			$response['category_slug'] = $item->category_slug;
+			$response['item'] = $item->category_slug . ' ' . $item->custom_url . ' ' . $item->product_sku;
 			wp_send_json($response, 400);
 		}
 
@@ -842,6 +842,7 @@ class PpuAdmin
 			$response['status'] = 'error';
 			$response['message'] = $th->getMessage();
 		}
+
 		return $response;
 	}
 
@@ -895,7 +896,8 @@ class PpuAdmin
 			get_option('ppu-wc-secret'),
 			[
 				'wp_api' => true,
-				'version' => 'wc/v3'
+				'version' => 'wc/v3',
+				'timeout' => 300,
 			]
 		);
 	}
