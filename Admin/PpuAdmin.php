@@ -1155,17 +1155,29 @@ class PpuAdmin
 	private function addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId)
 	{
 		global $wpdb;
+		$videoJsonExists = $wpdb->get_results("SELECT * FROM devb2b.wp_postmeta WHERE post_id = {$productId} AND meta_key = '_ywcfav_video';");
+
+		if (count($videoJsonExists) > 0) { // if a video JSON exists, delete all
+			$wpdb->delete(
+				$wpdb->prefix . 'postmeta',
+				[
+					'post_id' => $productId,
+					'meta_key' => '_ywcfav_video'
+				]
+			);
+		}
 
 		$finalJsonString = 'a:' . $nrOfVideos . ':{' . implode('', $videoJsonStringArray) . '}';
 		$result = $wpdb->insert(
 			$wpdb->prefix . 'postmeta',
 			[
+				'meta_value' => $finalJsonString,
 				'post_id' => $productId,
-				'meta_key' => '_ywcfav_video',
-				'meta_value' => $finalJsonString
+				'meta_key' => '_ywcfav_video'
 			]
 		);
 
+		//echo $wpdb->last_query;
 		if ($result > 0) {
 			return true;
 		}
