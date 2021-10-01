@@ -633,220 +633,6 @@ class PpuAdmin
 	}
 
 	/**
-	 * Creates a WordPress menu
-	 *
-	 * @param object $data
-	 * @return string
-	 */
-	public function handleMenuUpload($menu)
-	{
-		$response = [];
-		$createdMenus = [];
-		if ($createdMenu = $this->createMenuContainer($menu->name)) { // create menu container
-			$menuId = $createdMenu['menu_id'];
-			$menuName = $createdMenu['name'];
-			if ($menu->lang === '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => 'en'];
-			if ($menu->lang !== '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => $menu->lang];
-		} else {
-			$response['status'] = 'error';
-			$response['message'] = "Error creating menu container";
-			wp_send_json($response, 400);
-		}
-
-		$parentItems = array_filter($menu->items, function ($item) {
-			return $item->parent_menu_item_name === '';
-		});
-		$childItems = array_filter($menu->items, function ($item) {
-			return $item->parent_menu_item_name !== '';
-		});
-
-		foreach ($parentItems as $parent) { // create parent menu items
-			if (!is_int($parent->position) && empty($parent->position)) {
-				$response['status'] = 'error';
-				$response['message'] = "Position is missing for {$parent->menu_item_name}";
-				wp_send_json($response, 400);
-			}
-			if (!is_int($this->create_menu_item($menuId, $parent))) {
-				$response['status'] = 'error';
-				$response['message'] = "Problem creating parent item";
-				$response['menu_item_name'] = $parent->menu_item_name;
-				break;
-			}
-		}
-
-		$currentMenuItems = wp_get_nav_menu_items($menuName);
-		$formattedCurrentMenuItemsArray = [];
-		foreach ($currentMenuItems as $menuItem) {
-			$formattedCurrentMenuItemsArray[$menuItem->title] = $menuItem->ID;
-		}
-
-		foreach ($childItems as $child) { // create child menu items
-			if (!is_int($child->position) && empty($child->position)) {
-				$response['status'] = 'error';
-				$response['message'] = "Position is missing for {$child->menu_item_name}";
-				wp_send_json($response, 400);
-			}
-			$parentId = $formattedCurrentMenuItemsArray[$child->parent_menu_item_name];
-			if (!is_int($this->create_menu_item($menuId, $child, $parentId))) {
-				$response['status'] = 'error';
-				$response['message'] = "Problem creating child item";
-				$response['menu_item_name'] = $child->menu_item_name;
-				break;
-			}
-		}
-		$this->joinCreatedMenus($createdMenus);
-
-		foreach ($response as $key => $value) {
-			if (isset($value) && $value['status'] === 'error') {
-				$this->deleteAllCreatedMenus($createdMenus);
-				wp_send_json($response, 400);
-			}
-		}
-
-		$response['status'] = 'success';
-		$response['message'] = 'menu(\'s) created successfully';
-		$response['menus'] = $createdMenus;
-
-		wp_send_json($response, 200);
-	}
-
-	/**
-	 * Creates a menu container (in wp_terms table)
-	 *
-	 * @param object $menu_name
-	 * @return array
-	 */
-	private function createMenuContainer($name)
-	{
-		if (empty($name)) return false;
-
-		$uniqueMenuName = $name . '_' . time();
-		$menuId = wp_create_nav_menu($uniqueMenuName);
-
-		if (isset($menuId->errors)) {
-			return false;
-		}
-		return ['menu_id' => $menuId, 'name' => $uniqueMenuName];
-	}
-
-	private function joinCreatedMenus($menuArray)
-	{
-		global $wpdb;
-		$defaultLanguageMenuArray = [];
-		// Get current term_relationships for menu ID's
-		$existingRelationships = [];
-		foreach ($menuArray as $menu) {
-			if ($menu['lang'] !== 'en') {
-				// get existing terms for secondary languages
-				$tempResult[$menu['lang']] = $wpdb->get_results("SELECT object_id FROM {$wpdb->prefix}term_relationships WHERE term_taxonomy_id = {$menu['id']};");
-				$mappedResult[$menu['lang']] = array_map(function ($e) {
-					return $e->object_id;
-				}, $tempResult[$menu['lang']]);
-				$existingRelationships[$menu['lang']] = implode(',', $mappedResult[$menu['lang']]);
-			}
-			if ($menu['lang'] === 'en') {
-				$defaultLanguageMenuArray = $menu;
-			}
-		}
-
-		// update menu items langauges
-		$stringTranslationsTable = $wpdb->prefix . 'icl_translations';
-		foreach ($existingRelationships as $language => $relationshipsString) {
-			$updateMenuItemsSql = "UPDATE $stringTranslationsTable SET language_code = '$language', source_language_code = 'en' WHERE element_id in ($relationshipsString);";
-			$wpdb->get_results($updateMenuItemsSql);
-		}
-
-		$tridSql = "SELECT trid FROM $stringTranslationsTable WHERE language_code = 'en' AND element_id = {$defaultLanguageMenuArray['id']};";
-		$trid = $wpdb->get_results($tridSql)[0]->trid;
-
-		// update menu container languages and sync trid's of menu container
-		foreach ($menuArray as $menu) {
-			if ($menu['lang'] === 'en') continue;
-			$updateMenuContainersSql = "UPDATE $stringTranslationsTable SET language_code = '{$menu['lang']}', trid = $trid, source_language_code = 'en' WHERE element_id = {$menu['id']};";
-			$wpdb->get_results($updateMenuContainersSql);
-		}
-	}
-
-	private function deleteAllCreatedMenus($menuArray)
-	{
-		foreach ($menuArray as $menuItem) {
-			wp_delete_nav_menu($menuItem['id']);
-		}
-	}
-
-	/**
-	 * Creates a menu item
-	 *
-	 * @param int $menuId
-	 * @param object $item
-	 * @param integer $parentId
-	 * @return void
-	 */
-	private function create_menu_item($menuId, $item, $parentId = 0)
-	{
-		$menuObject = [
-			'menu-item-position' => $item->position,
-			'menu-item-status' => 'publish',
-			'menu-item-parent-id' => $parentId,
-			'menu-item-title' => $item->menu_item_name, // display name
-			'menu-item-attr-title' => $item->menu_item_name, // css title attribute
-		];
-
-		if (!empty($item->category_slug) && empty($item->custom_url) && empty($item->product_sku)) {
-			// category menu item
-			$term = get_term_by('slug', $item->category_slug, 'product_cat');
-			if ($term === false) {
-				$response['status'] = 'error';
-				$response['message'] = "Error finding existing category";
-				$response['menu_item_name'] = $item->menu_item_name;
-				$response['item'] = $item->category_slug;
-				wp_send_json($response, 400);
-			}
-
-			$menuObject['menu-item-type'] = 'taxonomy';
-			$menuObject['menu-item-object'] = $term->taxonomy;
-			$menuObject['menu-item-object-id'] = $term->term_id;
-		} else if (empty($item->category_slug) && empty($item->custom_url) && !empty($item->product_sku)) {
-			// product menu item
-			$productId = wc_get_product_id_by_sku($item->product_sku);
-			if ($productId === 0) {
-				$response['status'] = 'error';
-				$response['message'] = "Error finding product";
-				$response['menu_item_name'] = $item->menu_item_name;
-				$response['item'] = $item->product_sku;
-				wp_send_json($response, 400);
-			}
-
-			$menuObject['menu-item-type'] = 'post_type';
-			$menuObject['menu-item-object'] = 'product';
-			$menuObject['menu-item-object-id'] = $productId;
-		} else if (empty($item->category_slug) && !empty($item->custom_url) && empty($item->product_sku)) {
-			// custom menu item
-			$menuObject['menu-item-type'] = 'custom';
-			$menuObject['menu-item-url'] = $item->custom_url;
-		} else {
-			$response['status'] = 'error';
-			$response['message'] = "Error defining menu item type";
-			$response['menu_item_name'] = $item->menu_item_name;
-			$response['item'] = $item->category_slug . ' ' . $item->custom_url . ' ' . $item->product_sku;
-			wp_send_json($response, 400);
-		}
-
-		try {
-			$response = wp_update_nav_menu_item(
-				$menuId,
-				0, // current menu item ID - 0 for new item,
-				$menuObject
-			);
-		} catch (\Throwable $th) {
-			$response['status'] = 'error';
-			$response['message'] = $th->getMessage();
-		}
-
-		return $response;
-	}
-
-	/**
 	 * Process products JSON
 	 */
 	public function uploadJsonViaForm()
@@ -1155,29 +941,17 @@ class PpuAdmin
 	private function addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId)
 	{
 		global $wpdb;
-		$videoJsonExists = $wpdb->get_results("SELECT * FROM devb2b.wp_postmeta WHERE post_id = {$productId} AND meta_key = '_ywcfav_video';");
-
-		if (count($videoJsonExists) > 0) { // if a video JSON exists, delete all
-			$wpdb->delete(
-				$wpdb->prefix . 'postmeta',
-				[
-					'post_id' => $productId,
-					'meta_key' => '_ywcfav_video'
-				]
-			);
-		}
 
 		$finalJsonString = 'a:' . $nrOfVideos . ':{' . implode('', $videoJsonStringArray) . '}';
 		$result = $wpdb->insert(
 			$wpdb->prefix . 'postmeta',
 			[
-				'meta_value' => $finalJsonString,
 				'post_id' => $productId,
-				'meta_key' => '_ywcfav_video'
+				'meta_key' => '_ywcfav_video',
+				'meta_value' => $finalJsonString
 			]
 		);
 
-		//echo $wpdb->last_query;
 		if ($result > 0) {
 			return true;
 		}
@@ -1939,10 +1713,412 @@ class PpuAdmin
 	}
 
 	/**
-	 * Disable image downscaling - this add the word "scaled" to images - return false to disable
+	 * Disable image downscaling - this adds the word "scaled" to images - return false to disable
 	 */
 	public function disableImageDownscaling()
 	{
 		return false;
+	}
+
+	/**
+	 * Creates a WordPress menu
+	 *
+	 * @param object $data
+	 * @return string
+	 */
+	public function handleMenuUpload($menu)
+	{
+		$response = [];
+		$createdMenus = [];
+		if ($createdMenu = $this->createMenuContainer($menu->name)) { // create menu container
+			$menuId = $createdMenu['menu_id'];
+			$menuName = $createdMenu['name'];
+			if ($menu->lang === '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => 'en'];
+			if ($menu->lang !== '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => $menu->lang];
+		} else {
+			$response['status'] = 'error';
+			$response['message'] = "Error creating menu container";
+			wp_send_json($response, 400);
+		}
+
+		$parentItems = array_filter($menu->items, function ($item) {
+			return $item->parent_menu_item_name === '';
+		});
+		$childItems = array_filter($menu->items, function ($item) {
+			return $item->parent_menu_item_name !== '';
+		});
+
+		foreach ($parentItems as $parent) { // create parent menu items
+			if (!is_int($parent->position) && empty($parent->position)) {
+				$response['status'] = 'error';
+				$response['message'] = "Position is missing for {$parent->menu_item_name}";
+				wp_send_json($response, 400);
+			}
+			$result = $this->create_menu_item($menuId, $parent);
+			if (!is_int($result)) {
+				$response['status'] = 'error';
+				$response['message'] = "Problem creating parent item";
+				$response['menu_item_name'] = $parent->menu_item_name;
+				break;
+			}
+		}
+
+		$currentMenuItems = wp_get_nav_menu_items($menuName);
+		$formattedCurrentMenuItemsArray = [];
+		foreach ($currentMenuItems as $menuItem) {
+			$formattedCurrentMenuItemsArray[$menuItem->title] = $menuItem->ID;
+		}
+
+		$finalItemArray = [];
+		foreach ($childItems as $child) { // create child menu items
+			if (!is_int($child->position) && empty($child->position)) {
+				$response['status'] = 'error';
+				$response['message'] = "Position is missing for {$child->menu_item_name}";
+				wp_send_json($response, 400);
+			}
+			$parentId = $formattedCurrentMenuItemsArray[$child->parent_menu_item_name];
+			$result = $this->create_menu_item($menuId, $child, $parentId);
+			if (!is_int($result)) {
+				$response['status'] = 'error';
+				$response['message'] = "Problem creating child item";
+				$response['menu_item_name'] = $child->menu_item_name;
+				break;
+			}
+			$finalItemArray[] = ['childId' => $result, 'parentId' => $parentId];
+		}
+
+		$this->joinCreatedMenus($createdMenus);
+
+		foreach ($response as $key => $value) {
+			if (isset($value) && $value['status'] === 'error') {
+				$this->deleteAllCreatedMenus($createdMenus);
+				wp_send_json($response, 400);
+			}
+		}
+
+		// per parent create a parentString
+		$this->createMegaMenuString($currentMenuItems, wp_get_nav_menu_items($menuName));
+
+		$response['status'] = 'success';
+		$response['message'] = 'menu(\'s) created successfully';
+		$response['menus'] = $createdMenus;
+
+		wp_send_json($response, 200);
+	}
+
+	/**
+	 * Creates a menu container (in wp_terms table)
+	 *
+	 * @param object $menu_name
+	 * @return array
+	 */
+	private function createMenuContainer($name)
+	{
+		if (empty($name)) return false;
+
+		$uniqueMenuName = $name . '_' . time();
+		$menuId = wp_create_nav_menu($uniqueMenuName);
+
+		if (isset($menuId->errors)) {
+			return false;
+		}
+		return ['menu_id' => $menuId, 'name' => $uniqueMenuName];
+	}
+
+	private function joinCreatedMenus($menuArray)
+	{
+		global $wpdb;
+		$defaultLanguageMenuArray = [];
+		// Get current term_relationships for menu ID's
+		$existingRelationships = [];
+		foreach ($menuArray as $menu) {
+			if ($menu['lang'] !== 'en') {
+				// get existing terms for secondary languages
+				$tempResult[$menu['lang']] = $wpdb->get_results("SELECT object_id FROM {$wpdb->prefix}term_relationships WHERE term_taxonomy_id = {$menu['id']};");
+				$mappedResult[$menu['lang']] = array_map(function ($e) {
+					return $e->object_id;
+				}, $tempResult[$menu['lang']]);
+				$existingRelationships[$menu['lang']] = implode(',', $mappedResult[$menu['lang']]);
+			}
+			if ($menu['lang'] === 'en') {
+				$defaultLanguageMenuArray = $menu;
+			}
+		}
+
+		// update menu items langauges
+		$stringTranslationsTable = $wpdb->prefix . 'icl_translations';
+		foreach ($existingRelationships as $language => $relationshipsString) {
+			$updateMenuItemsSql = "UPDATE $stringTranslationsTable SET language_code = '$language', source_language_code = 'en' WHERE element_id in ($relationshipsString);";
+			$wpdb->get_results($updateMenuItemsSql);
+		}
+
+		$tridSql = "SELECT trid FROM $stringTranslationsTable WHERE language_code = 'en' AND element_id = {$defaultLanguageMenuArray['id']};";
+		$trid = $wpdb->get_results($tridSql)[0]->trid;
+
+		// update menu container languages and sync trid's of menu container
+		foreach ($menuArray as $menu) {
+			if ($menu['lang'] === 'en') continue;
+			$updateMenuContainersSql = "UPDATE $stringTranslationsTable SET language_code = '{$menu['lang']}', trid = $trid, source_language_code = 'en' WHERE element_id = {$menu['id']};";
+			$wpdb->get_results($updateMenuContainersSql);
+		}
+	}
+
+	private function deleteAllCreatedMenus($menuArray)
+	{
+		foreach ($menuArray as $menuItem) {
+			wp_delete_nav_menu($menuItem['id']);
+		}
+	}
+
+	/**
+	 * Creates a menu item
+	 *
+	 * @param int $menuId
+	 * @param object $item
+	 * @param integer $parentId
+	 * @return void
+	 */
+	private function create_menu_item($menuId, $item, $parentId = 0)
+	{
+		$menuObject = [
+			'menu-item-position' => $item->position,
+			'menu-item-status' => 'publish',
+			'menu-item-parent-id' => $parentId,
+			'menu-item-title' => $item->menu_item_name, // display name
+			'menu-item-attr-title' => $item->menu_item_name, // css title attribute
+		];
+
+		if (!empty($item->category_slug) && empty($item->custom_url) && empty($item->product_sku)) {
+			// category menu item
+			$term = get_term_by('slug', $item->category_slug, 'product_cat');
+			if ($term === false) {
+				$response['status'] = 'error';
+				$response['message'] = "Error finding existing category";
+				$response['menu_item_name'] = $item->menu_item_name;
+				$response['item'] = $item->category_slug;
+				wp_send_json($response, 400);
+			}
+
+			$menuObject['menu-item-type'] = 'taxonomy';
+			$menuObject['menu-item-object'] = $term->taxonomy;
+			$menuObject['menu-item-object-id'] = $term->term_id;
+		} else if (empty($item->category_slug) && empty($item->custom_url) && !empty($item->product_sku)) {
+			// product menu item
+			$productId = wc_get_product_id_by_sku($item->product_sku);
+			if ($productId === 0) {
+				$response['status'] = 'error';
+				$response['message'] = "Error finding product";
+				$response['menu_item_name'] = $item->menu_item_name;
+				$response['item'] = $item->product_sku;
+				wp_send_json($response, 400);
+			}
+
+			$menuObject['menu-item-type'] = 'post_type';
+			$menuObject['menu-item-object'] = 'product';
+			$menuObject['menu-item-object-id'] = $productId;
+		} else if (empty($item->category_slug) && !empty($item->custom_url) && empty($item->product_sku)) {
+			// custom menu item
+			$menuObject['menu-item-type'] = 'custom';
+			$menuObject['menu-item-url'] = $item->custom_url;
+		} else {
+			$response['status'] = 'error';
+			$response['message'] = "Error defining menu item type";
+			$response['menu_item_name'] = $item->menu_item_name;
+			$response['item'] = $item->category_slug . ' ' . $item->custom_url . ' ' . $item->product_sku;
+			wp_send_json($response, 400);
+		}
+
+		try {
+			$response = wp_update_nav_menu_item(
+				$menuId,
+				0, // current menu item ID - 0 for new item,
+				$menuObject
+			);
+		} catch (\Throwable $th) {
+			$response['status'] = 'error';
+			$response['message'] = $th->getMessage();
+		}
+
+		return $response;
+	}
+
+	private function createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray)
+	{
+		// create array of parent items with child array
+		$parentIdArray = array_map(function ($el) {
+			return $el->ID;
+		}, $parentItemArray);
+
+		$menuItemsArray = [];
+		foreach ($parentIdArray as $key => $value) {
+			$menuItemsArray[$value] = [];
+		}
+
+		foreach ($completeMenuItemArray as $menuItem) {
+			array_push($menuItemsArray[$menuItem->menu_item_parent], $menuItem->ID);
+		}
+
+		return $menuItemsArray;
+	}
+
+	private function createMegaMenuString($parentItemArray, $completeMenuItemArray)
+	{
+		$menuItemsArray = $this->createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray);
+		// per parent, create a parent string
+		foreach ($menuItemsArray as $parent) {
+			if (empty($parent)) continue;
+			$parentString = $this->createMegaMenuParentObjectString($parent);
+			// attach this to the meta data of the parent item 
+		}
+
+		// per child, hwat?
+	}
+	/**
+	 * Creates a postmetadata string for a mega menu parent item
+	 *
+	 * @param array $navMenuParentItemArray	Array of post item IDs aka nav menu item IDs
+	 * @return string
+	 */
+	private function createMegaMenuParentObjectString($navMenuParentItemArray)
+	{
+
+		$maxRowsPerColumn = 11;
+		$maxColumns = 3;
+		$maxNumberOfItems = $maxRowsPerColumn * $maxColumns;
+		if (count($navMenuParentItemArray) > $maxNumberOfItems) {
+			echo "Too many items -> I can\'t divide this (" . count($navMenuParentItemArray) . " items) over 3 columns of 11 rows.";
+			return;
+		}
+
+		$navMenuItemGroups = [
+			'columnOne' => array_slice($navMenuParentItemArray, 0, 11),
+			'columnTwo' =>  array_slice($navMenuParentItemArray, 11, 11),
+			'columnthree' =>  array_slice($navMenuParentItemArray, 22, 11),
+		];
+		$twoEmptyColumns = empty($navMenuItemGroups['columnTwo']);
+		$oneEmptyColumn = empty($navMenuItemGroups['columnThree']);
+
+		if ($twoEmptyColumns) {
+			$nrOfNavItemColumns = 1;
+		} else if ($oneEmptyColumn) {
+			$nrOfNavItemColumns = 2;
+		} else {
+			$nrOfNavItemColumns = 3;
+		}
+
+		$string =
+			'a: 14: {
+			s: 10: "item_align";s: 4: "left";
+			s: 13: "icon_position";
+			s: 4: "left";
+			s: 17: "sticky_visibility";
+			s: 6: "always";
+			s: 5: "align";
+			s: 12: "bottom-right";
+			s: 9: "hide_text";
+			s: 5: "false";
+			s: 12: "disable_link";
+			s: 5: "false";
+			s: 10: "hide_arrow";
+			s: 5: "false";
+			s: 14: "hide_on_mobile";
+			s: 5: "false";
+			s: 15: "hide_on_desktop";
+			s: 5: "false";
+			s: 17: "close_after_click";
+			s: 5: "false";
+			s: 23: "hide_sub_menu_on_mobile";
+			s: 5: "false";
+			s: 17: "collapse_children";
+			s: 5: "false";    
+			s: 4: "type";
+			s: 4: "grid";
+			s: 4: "grid";
+			a: 1: {
+				i: 0;
+				a: 2: {
+					s: 4: "meta";
+					a: 4: {
+						s: 5: "class";
+						s: 0: "";
+						s: 15: "hide-on-desktop";
+						s: 5: "false";
+						s: 14: "hide-on-mobile";
+						s: 5: "false";
+						s: 7: "columns";
+						s: 2: "12";
+					}
+					s: 7: "columns";
+					a: ' . ($nrOfNavItemColumns + 1) . ': {';
+
+		$tempString = '';
+		for ($i = 0; $i < $nrOfNavItemColumns; $i++) {
+			$tempString .= $this->createMegaMenuParentObjectColumnString($i, $navMenuParentItemArray);
+		}
+
+		$imageSwapString = 'i: ' . ($nrOfNavItemColumns) . ';
+		a: 2: {
+			s: 4: "meta";
+			a: 4: {
+				s: 4: "span";
+				s: 1: "3";
+				s: 5: "class";
+				s: 0: "";
+				s: 15: "hide-on-desktop";
+				s: 5: "false";
+				s: 14: "hide-on-mobile";
+				s: 5: "false";
+			}
+			s: 5: "items";
+			a: 1: {
+				i: 0;
+				a: 2: {
+					s: 2: "id";
+					s: 25: "maxmegamenu_image_swap-40";
+					s: 4: "type";
+					s: 6: "widget";
+				}
+			}
+		}
+	}
+}}}';
+
+		return $string . $tempString . '}' . $imageSwapString;
+	}
+
+	private function createMegaMenuParentObjectColumnString($columnIteration, $columnObjectArray)
+	{
+		$columnObjectItems = 'i: ' . $columnIteration . ';
+		a: 2: {
+			s: 4: "meta";
+			a: 4: {
+				s: 4: "span";
+				s: 1: "3";
+				s: 5: "class";
+				s: 0: "";
+				s: 15: "hide-on-desktop";
+				s: 5: "false";
+				s: 14: "hide-on-mobile";
+				s: 5: "false";
+			}
+			s: 5: "items";
+			a: ' . (count($columnObjectArray)) . ': {';
+		foreach ($columnObjectArray as $key => $columnObjectItem) {
+			$columnObjectItems .= $this->createMegaMenuParentObjectColumnObjectItemString($key, $columnObjectItem);
+		}
+
+
+		return $columnObjectItems . '}';
+	}
+
+	private function createMegaMenuParentObjectColumnObjectItemString($objectIteration, $menuObjectId)
+	{
+		return 'i: ' . $objectIteration . ';
+		a: 2: {
+			s: 2: "id";
+			s: ' . strlen((string) $menuObjectId) . ': "' . $menuObjectId . '";
+			s: 4: "type";
+			s: 4: "item";
+		}';
 	}
 }
