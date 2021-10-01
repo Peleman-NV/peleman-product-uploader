@@ -817,6 +817,7 @@ class PpuAdmin
 					$iterator++;
 				}
 				$response = $this->addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId);
+
 				if ($response === false) {
 					$response['status'] = 'error';
 					$response['message'] = 'Could not add video to product';
@@ -941,17 +942,29 @@ class PpuAdmin
 	private function addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId)
 	{
 		global $wpdb;
+		$videoJsonExists = $wpdb->get_results("SELECT * FROM devb2b.wp_postmeta WHERE post_id = {$productId} AND meta_key = '_ywcfav_video';");
+
+		if (count($videoJsonExists) > 0) { // if a video JSON exists, delete all
+			$wpdb->delete(
+				$wpdb->prefix . 'postmeta',
+				[
+					'post_id' => $productId,
+					'meta_key' => '_ywcfav_video'
+				]
+			);
+		}
 
 		$finalJsonString = 'a:' . $nrOfVideos . ':{' . implode('', $videoJsonStringArray) . '}';
 		$result = $wpdb->insert(
 			$wpdb->prefix . 'postmeta',
 			[
+				'meta_value' => $finalJsonString,
 				'post_id' => $productId,
-				'meta_key' => '_ywcfav_video',
-				'meta_value' => $finalJsonString
+				'meta_key' => '_ywcfav_video'
 			]
 		);
 
+		//echo $wpdb->last_query;
 		if ($result > 0) {
 			return true;
 		}
@@ -1787,17 +1800,25 @@ class PpuAdmin
 			$finalItemArray[] = ['childId' => $result, 'parentId' => $parentId];
 		}
 
+		// per parent create a parentString
+		if ($this->createMegaMenu($currentMenuItems, wp_get_nav_menu_items($menuName)) === false) {
+			$response['status'] = 'error';
+			$response['message'] = "Error creating mega menu";
+		}
+
 		$this->joinCreatedMenus($createdMenus);
 
 		foreach ($response as $key => $value) {
-			if (isset($value) && $value['status'] === 'error') {
+			if (isset($value) && $value === 'error') {
 				$this->deleteAllCreatedMenus($createdMenus);
 				wp_send_json($response, 400);
 			}
 		}
 
-		// per parent create a parentString
-		$this->createMegaMenuString($currentMenuItems, wp_get_nav_menu_items($menuName));
+		// set menu as active and vertical
+		$locations = get_theme_mod('nav_menu_locations');
+		$locations['vertical'] = $menuId;
+		set_theme_mod('nav_menu_locations', $locations);
 
 		$response['status'] = 'success';
 		$response['message'] = 'menu(\'s) created successfully';
@@ -1942,37 +1963,77 @@ class PpuAdmin
 		return $response;
 	}
 
-	private function createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray)
-	{
-		// create array of parent items with child array
-		$parentIdArray = array_map(function ($el) {
-			return $el->ID;
-		}, $parentItemArray);
-
-		$menuItemsArray = [];
-		foreach ($parentIdArray as $key => $value) {
-			$menuItemsArray[$value] = [];
-		}
-
-		foreach ($completeMenuItemArray as $menuItem) {
-			array_push($menuItemsArray[$menuItem->menu_item_parent], $menuItem->ID);
-		}
-
-		return $menuItemsArray;
-	}
-
-	private function createMegaMenuString($parentItemArray, $completeMenuItemArray)
+	private function createMegaMenu($parentItemArray, $completeMenuItemArray)
 	{
 		$menuItemsArray = $this->createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray);
-		// per parent, create a parent string
-		foreach ($menuItemsArray as $parent) {
-			if (empty($parent)) continue;
-			$parentString = $this->createMegaMenuParentObjectString($parent);
-			// attach this to the meta data of the parent item 
+		foreach ($menuItemsArray as $parentId => $childArray) {
+			if (empty($childArray)) continue;
+			$parentSettingsArray = $this->createMegaMenuParentObjectString($childArray);
+			if ($this->addMenuObjectStringToPostMetaData($parentId, $parentSettingsArray) === false) {
+				return false;
+			}
+
+			foreach ($childArray as $childId) {
+				$childSettingsArray = $this->createMegaMenuChildObjectString($childId);
+				if ($this->addMenuObjectStringToPostMetaData($childId, $childSettingsArray) === false) {
+					return false;
+				}
+			}
 		}
 
-		// per child, hwat?
+		return true;
 	}
+
+	private function addMenuObjectStringToPostMetaData($id, $settingsArray)
+	{
+		update_post_meta($id, '_megamenu', $settingsArray);
+		update_post_meta($id, '_menu_item_megamenu_col', 'columns-2');
+		update_post_meta($id, '_menu_item_megamenu_col_tab', 'columns-1');
+		update_post_meta($id, '_menu_item_megamenu_icon_alignment', 'left');
+		update_post_meta($id, '_menu_item_megamenu_icon_size', 13);
+		update_post_meta($id, '_menu_item_megamenu_style', 'menu_style_column');
+		update_post_meta($id, '_menu_item_megamenu_widgetarea', 0);
+		update_post_meta($id, '_menu_item_megamenu_background_image', '');
+		update_post_meta($id, '_menu_item_megamenu_icon', '');
+		update_post_meta($id, '_menu_item_megamenu_icon_color', '');
+		update_post_meta($id, '_menu_item_megamenu_sublabel', '');
+		update_post_meta($id, '_menu_item_megamenu_sublabel_color', '');
+	}
+
+
+	/**
+	 * Creates a postmetadata string for a mega menu child item
+	 *
+	 * @param int $childId	Child item ID
+	 * @return array
+	 */
+	private function createMegaMenuChildObjectString($childId)
+	{
+		$itemType = get_post_meta($childId, '_menu_item_object');
+		$childImageId = 0;
+		if (isset($itemType[0]) && $itemType[0] === 'product') {
+			$productId = get_post_meta($childId, '_menu_item_object_id')[0];
+			$childImageId = get_post_thumbnail_id($productId);
+		}
+
+		if ($childImageId !== 0) {
+			$childSettingsArray = [
+				"type" => "grid",
+				"image_swap" => [
+					"id" => strval($childImageId),
+					"size" => "full"
+				]
+			];
+		} else {
+			$childSettingsArray = [
+				"type" => "grid",
+			];
+		}
+
+		return $childSettingsArray;
+	}
+
+
 	/**
 	 * Creates a postmetadata string for a mega menu parent item
 	 *
@@ -1993,8 +2054,9 @@ class PpuAdmin
 		$navMenuItemGroups = [
 			'columnOne' => array_slice($navMenuParentItemArray, 0, 11),
 			'columnTwo' =>  array_slice($navMenuParentItemArray, 11, 11),
-			'columnthree' =>  array_slice($navMenuParentItemArray, 22, 11),
+			'columnThree' =>  array_slice($navMenuParentItemArray, 22, 11),
 		];
+
 		$twoEmptyColumns = empty($navMenuItemGroups['columnTwo']);
 		$oneEmptyColumn = empty($navMenuItemGroups['columnThree']);
 
@@ -2006,119 +2068,110 @@ class PpuAdmin
 			$nrOfNavItemColumns = 3;
 		}
 
-		$string =
-			'a: 14: {
-			s: 10: "item_align";s: 4: "left";
-			s: 13: "icon_position";
-			s: 4: "left";
-			s: 17: "sticky_visibility";
-			s: 6: "always";
-			s: 5: "align";
-			s: 12: "bottom-right";
-			s: 9: "hide_text";
-			s: 5: "false";
-			s: 12: "disable_link";
-			s: 5: "false";
-			s: 10: "hide_arrow";
-			s: 5: "false";
-			s: 14: "hide_on_mobile";
-			s: 5: "false";
-			s: 15: "hide_on_desktop";
-			s: 5: "false";
-			s: 17: "close_after_click";
-			s: 5: "false";
-			s: 23: "hide_sub_menu_on_mobile";
-			s: 5: "false";
-			s: 17: "collapse_children";
-			s: 5: "false";    
-			s: 4: "type";
-			s: 4: "grid";
-			s: 4: "grid";
-			a: 1: {
-				i: 0;
-				a: 2: {
-					s: 4: "meta";
-					a: 4: {
-						s: 5: "class";
-						s: 0: "";
-						s: 15: "hide-on-desktop";
-						s: 5: "false";
-						s: 14: "hide-on-mobile";
-						s: 5: "false";
-						s: 7: "columns";
-						s: 2: "12";
-					}
-					s: 7: "columns";
-					a: ' . ($nrOfNavItemColumns + 1) . ': {';
+		$navColumnItemArray = [];
+		$navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($nrOfNavItemColumns, $navMenuItemGroups['columnOne']);
+		if (!empty($navMenuItemGroups['columnTwo'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($nrOfNavItemColumns, $navMenuItemGroups['columnTwo']);
+		if (!empty($navMenuItemGroups['columnThree'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($nrOfNavItemColumns, $navMenuItemGroups['columnThree']);
 
-		$tempString = '';
-		for ($i = 0; $i < $nrOfNavItemColumns; $i++) {
-			$tempString .= $this->createMegaMenuParentObjectColumnString($i, $navMenuParentItemArray);
-		}
+		$columnSpan = $nrOfNavItemColumns > 2 ? 3 : 6;
+		$navColumnItemArray[] = [
+			"meta" => [
+				"span" => strval($columnSpan),
+				"class" => "",
+				"hide-on-desktop" => "false",
+				"hide-on-mobile" => "false",
+			],
+			"items" => [
+				[
 
-		$imageSwapString = 'i: ' . ($nrOfNavItemColumns) . ';
-		a: 2: {
-			s: 4: "meta";
-			a: 4: {
-				s: 4: "span";
-				s: 1: "3";
-				s: 5: "class";
-				s: 0: "";
-				s: 15: "hide-on-desktop";
-				s: 5: "false";
-				s: 14: "hide-on-mobile";
-				s: 5: "false";
-			}
-			s: 5: "items";
-			a: 1: {
-				i: 0;
-				a: 2: {
-					s: 2: "id";
-					s: 25: "maxmegamenu_image_swap-40";
-					s: 4: "type";
-					s: 6: "widget";
-				}
-			}
-		}
-	}
-}}}';
+					"id" => "maxmegamenu_image_swap-40",
+					"type" => "widget"
+				]
+			]
+		];
 
-		return $string . $tempString . '}' . $imageSwapString;
+		$settingsArray = [
+			"type" => "grid",
+			"item_align" => "left",
+			"icon_position" => "left",
+			"sticky_visibility" => "always",
+			"align" => "bottom-right",
+			"hide_text" => "false",
+			"disable_link" => "false",
+			"hide_arrow" => "false",
+			"hide_on_mobile" => "false",
+			"hide_on_desktop" => "false",
+			"close_after_click" => "false",
+			"hide_sub_menu_on_mobile" => "false",
+			"collapse_children" => "false",
+			"grid" => [
+				[
+					"meta" => [
+						"class" => "",
+						"hide-on-desktop" => "false",
+						"hide-on-mobile" => "false",
+						"columns" => "12",
+					],
+					"columns" => $navColumnItemArray
+				]
+			]
+		];
+
+		return $settingsArray;
 	}
 
-	private function createMegaMenuParentObjectColumnString($columnIteration, $columnObjectArray)
+	private function createMegaMenuParentObjectColumnString($nrOfColumns, $columnObjectArray)
 	{
-		$columnObjectItems = 'i: ' . $columnIteration . ';
-		a: 2: {
-			s: 4: "meta";
-			a: 4: {
-				s: 4: "span";
-				s: 1: "3";
-				s: 5: "class";
-				s: 0: "";
-				s: 15: "hide-on-desktop";
-				s: 5: "false";
-				s: 14: "hide-on-mobile";
-				s: 5: "false";
-			}
-			s: 5: "items";
-			a: ' . (count($columnObjectArray)) . ': {';
+		$columnSpan = $nrOfColumns > 1 ? 3 : 6;
+		$columnObjectItemsArray = [];
 		foreach ($columnObjectArray as $key => $columnObjectItem) {
-			$columnObjectItems .= $this->createMegaMenuParentObjectColumnObjectItemString($key, $columnObjectItem);
+			$columnObjectItemsArray[] = $this->createMegaMenuParentObjectColumnObjectItemArray($columnObjectItem);
 		}
 
+		$columnObjectItems = [
+			"meta" => [
+				"span" => strval($columnSpan),
+				"class" => "",
+				"hide-on-desktop" => "false",
+				"hide-on-mobile" => "false",
+			],
+			"items" => $columnObjectItemsArray
+		];
 
-		return $columnObjectItems . '}';
+		return $columnObjectItems;
 	}
 
-	private function createMegaMenuParentObjectColumnObjectItemString($objectIteration, $menuObjectId)
+	private function createMegaMenuParentObjectColumnObjectItemArray($menuObjectId)
 	{
-		return 'i: ' . $objectIteration . ';
-		a: 2: {
-			s: 2: "id";
-			s: ' . strlen((string) $menuObjectId) . ': "' . $menuObjectId . '";
-			s: 4: "type";
-			s: 4: "item";
-		}';
+		return [
+
+			"id" => strval($menuObjectId),
+			"type" => "item"
+		];
+	}
+
+	/**
+	 * A helper function that gives an array of parent items with their children
+	 *
+	 * @param array $parentItemArray
+	 * @param array $completeMenuItemArray
+	 * @return array
+	 */
+	private function createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray)
+	{
+		$parentIdArray = array_map(function ($el) {
+			return $el->ID;
+		}, $parentItemArray);
+
+		$menuItemsArray = [];
+		foreach ($parentIdArray as $key => $value) {
+			$menuItemsArray[$value] = [];
+		}
+
+		foreach ($completeMenuItemArray as $menuItem) {
+			array_push($menuItemsArray[$menuItem->menu_item_parent], $menuItem->ID);
+		}
+
+		return $menuItemsArray;
 	}
 }
