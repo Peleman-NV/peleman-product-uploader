@@ -1668,55 +1668,6 @@ class PpuAdmin
 	}
 
 	/**
-	 * Show one or all orders
-	 */
-	public function showOrders()
-	{
-		if (isset($_POST['order_id']) && $_POST['order_id'] != '') {
-			$endpoint = 'orders/' . esc_attr($_POST['order_id']);
-		} else {
-			$endpoint = 'orders';
-		}
-
-		$api = $this->apiClient();
-		wp_send_json($api->get($endpoint), 200);
-	}
-
-	/**
-	 * Show one or all products
-	 */
-	public function showProducts()
-	{
-		if (isset($_POST['product_id']) && $_POST['product_id'] != '') {
-			$endpoint = 'products/' . esc_attr($_POST['product_id']);
-		} else {
-			$endpoint = 'products';
-		}
-
-		$api = $this->apiClient();
-		wp_send_json($api->get($endpoint), 200);
-	}
-
-	/**
-	 * Show one variation
-	 */
-	public function showVariations()
-	{
-		if (isset($_POST['variation_id']) && $_POST['variation_id'] != '') {
-			$variationId = $_POST['variation_id'];
-			$variation = wc_get_product($variationId);
-			$product = wc_get_product($variation->get_parent_id());
-			$endpoint = 'products/' . $product->get_id() . "/variations/" . $_POST['variation_id'];
-		} else {
-			print('<pre>' . __FILE__ . ':' . __LINE__ . PHP_EOL . print_r(['result' => 'no variation found'], true) . '</pre>');
-			die();
-		}
-
-		$api = $this->apiClient();
-		wp_send_json($api->get($endpoint), 200);
-	}
-
-	/**
 	 * Disable image downscaling - this adds the word "scaled" to images - return false to disable
 	 */
 	public function disableImageDownscaling()
