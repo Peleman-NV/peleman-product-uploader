@@ -1712,6 +1712,8 @@ class PpuAdmin
 				wp_send_json($response, 400);
 			}
 			$result = $this->create_menu_item($menuId, $parent);
+			// save upload item information to items metadata to use later
+			update_post_meta($result, 'peleman_mega_menu', $parent);
 			if (!is_int($result)) {
 				$response['status'] = 'error';
 				$response['message'] = "Problem creating parent item";
@@ -1735,6 +1737,8 @@ class PpuAdmin
 			}
 			$parentId = $formattedCurrentMenuItemsArray[$child->parent_menu_item_name];
 			$result = $this->create_menu_item($menuId, $child, $parentId);
+			// save upload item information to items metadata to use later
+			update_post_meta($result, 'peleman_mega_menu', $child);
 			if (!is_int($result)) {
 				$response['status'] = 'error';
 				$response['message'] = "Problem creating child item";
@@ -1954,29 +1958,51 @@ class PpuAdmin
 	private function createMegaMenuChildObjectString($childId)
 	{
 		$itemType = get_post_meta($childId, '_menu_item_object');
+		$jsonItemInformation = get_post_meta($childId, 'peleman_mega_menu', true);
+		$isHeading = $jsonItemInformation->heading_text;
 		$childImageId = 0;
+
 		if (isset($itemType[0]) && $itemType[0] === 'product') {
 			$productId = get_post_meta($childId, '_menu_item_object_id')[0];
 			$childImageId = get_post_thumbnail_id($productId);
 		}
 
-		if ($childImageId !== 0) {
-			$childSettingsArray = [
-				"type" => "grid",
-				"image_swap" => [
-					"id" => strval($childImageId),
-					"size" => "full"
+		$childSettingsArray["type"] = "grid";
+		if ($isHeading) {
+			$childSettingsArray['styles'] = [
+				'enabled' => [
+					'menu_item_link_color' => '#333',
+					'menu_item_link_weight' => 'bold'
 				]
 			];
-		} else {
-			$childSettingsArray = [
-				"type" => "grid",
+		}
+		if ($childImageId !== 0) {
+			$childSettingsArray['image_swap'] = [
+				"id" => strval($childImageId),
+				"size" => "full"
 			];
 		}
 
 		return $childSettingsArray;
 	}
 
+	private function divideIntoArrayOnColumnNumber($array, $columnNumber)
+	{
+		$finalArray = [];
+		foreach ($array as $arrayKey => $arrayElement) {
+			if ($arrayElement->column_number < 1 || $arrayElement->column_number > 3) {
+				$response['status'] = 'error';
+				$response['message'] = "column_number must be 1,2, or 3";
+				$response['item'] = $arrayElement->menu_item_name;
+				$response['column_number'] = $arrayElement->column_number;
+				wp_send_json($response, 400);
+			}
+			if ($arrayElement->column_number === $columnNumber) {
+				$finalArray[$arrayKey] = $arrayElement;
+			}
+		}
+		return $finalArray;
+	}
 
 	/**
 	 * Creates a postmetadata string for a mega menu parent item
@@ -1986,20 +2012,19 @@ class PpuAdmin
 	 */
 	private function createMegaMenuParentObjectString($navMenuParentItemArray)
 	{
-
-		$maxRowsPerColumn = 11;
-		$maxColumns = 3;
-		$maxNumberOfItems = $maxRowsPerColumn * $maxColumns;
-		if (count($navMenuParentItemArray) > $maxNumberOfItems) {
-			echo "Too many items -> I can\'t divide this (" . count($navMenuParentItemArray) . " items) over 3 columns of 11 rows.";
-			return;
+		// add JSON item data to elements
+		$navMenuItemColumns = [];
+		foreach ($navMenuParentItemArray as $navMenuItem) {
+			$navMenuItemColumns[$navMenuItem] = get_post_meta($navMenuItem, "peleman_mega_menu", true);
 		}
 
+		// divvy up into colums
 		$navMenuItemGroups = [
-			'columnOne' => array_slice($navMenuParentItemArray, 0, 11),
-			'columnTwo' =>  array_slice($navMenuParentItemArray, 11, 11),
-			'columnThree' =>  array_slice($navMenuParentItemArray, 22, 11),
+			'columnOne' => $this->divideIntoArrayOnColumnNumber($navMenuItemColumns, 1),
+			'columnTwo' => $this->divideIntoArrayOnColumnNumber($navMenuItemColumns, 2),
+			'columnThree' => $this->divideIntoArrayOnColumnNumber($navMenuItemColumns, 3),
 		];
+
 
 		$twoEmptyColumns = empty($navMenuItemGroups['columnTwo']);
 		$oneEmptyColumn = empty($navMenuItemGroups['columnThree']);
@@ -2027,8 +2052,7 @@ class PpuAdmin
 			],
 			"items" => [
 				[
-
-					"id" => "maxmegamenu_image_swap-40",
+					"id" => "maxmegamenu_image_swap-40", // TODO this is dangerous to have hardcoded
 					"type" => "widget"
 				]
 			]
@@ -2069,7 +2093,7 @@ class PpuAdmin
 		$columnSpan = $nrOfColumns > 1 ? 3 : 6;
 		$columnObjectItemsArray = [];
 		foreach ($columnObjectArray as $key => $columnObjectItem) {
-			$columnObjectItemsArray[] = $this->createMegaMenuParentObjectColumnObjectItemArray($columnObjectItem);
+			$columnObjectItemsArray[] = $this->createMegaMenuParentObjectColumnObjectItemArray($key);
 		}
 
 		$columnObjectItems = [
@@ -2095,7 +2119,7 @@ class PpuAdmin
 	}
 
 	/**
-	 * A helper function that gives an array of parent items with their children
+	 * A helper function that gives an array of parent item ID's with their child ID's
 	 *
 	 * @param array $parentItemArray
 	 * @param array $completeMenuItemArray
