@@ -84,18 +84,19 @@ class Plugin
 	{
 		$plugin_admin = new PpuAdmin($this->get_plugin_name(), $this->get_version());
 
+		// Enqueue scripts and styles
 		$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_styles');
 		$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts', 5);
-
+		// Register admin menu, plugin settings & admin forms to upload data
 		$this->loader->add_action('admin_menu', $plugin_admin, 'ppu_add_admin_menu');
 		$this->loader->add_action('admin_init', $plugin_admin, 'ppu_register_plugin_settings');
 		$this->loader->add_action('admin_post_upload_json', $plugin_admin, 'uploadJsonViaForm');
 		$this->loader->add_action('admin_post_nopriv_upload_json', $plugin_admin, 'uploadJsonViaForm');
-
+		// Register admin forms to show data
 		$this->loader->add_action('admin_post_show_orders', $plugin_admin, 'showOrders');
 		$this->loader->add_action('admin_post_show_products', $plugin_admin, 'showProducts');
 		$this->loader->add_action('admin_post_show_variations', $plugin_admin, 'showVariations');
-
+		// Register GET endpoints
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetAttributesEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetCategoriesEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetTagsEndpoint');
@@ -103,7 +104,7 @@ class Plugin
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetTermsEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetVariationsEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetImagesEndpoint');
-
+		// Register POST endpoints
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostAttributesEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostCategoriesEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostTagsEndpoint');
@@ -111,13 +112,10 @@ class Plugin
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostTermsEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostVariationsEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostImageEndpoint');
-
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerPostMenuEndpoint');
-		$this->loader->add_action('admin_post_upload_menu', $plugin_admin, 'uploadMenuViaForm');
-		$this->loader->add_action('admin_post_nopriv_upload_menu', $plugin_admin, 'uploadMenuViaForm');
-		$this->loader->add_action('big_image_size_threshold', $plugin_admin, 'disableImageDownscaling');
+		// Various
+		$this->loader->add_action('big_image_size_threshold', $plugin_admin, 'disableImageDownscaling'); // disable WP adding "-scaled" to images
 	}
-
 
 	/**
 	 * Run the loader to execute all of the hooks with WordPress.

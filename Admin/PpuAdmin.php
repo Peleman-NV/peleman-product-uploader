@@ -507,6 +507,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Posts an image using the POST data 
+	 * TODO: check if this can be much simplified with media_sideload_image().
+	 *
+	 * @param object $request
+	 * @return string
+	 */
 	public function postImage($request)
 	{
 		$data = json_decode($request->get_body());
@@ -603,24 +610,21 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Posts a menu.  It passes the request items to the handler.
+	 * This function was made to be called by a HTML form.
+	 *
+	 * @param object $request
+	 * @return void
+	 */
 	public function postMenu($request)
 	{
 		$data = json_decode($request->get_body());
 		$this->handleMenuUpload($data->menu);
 	}
 
-	public function uploadMenuViaForm()
-	{
-		check_admin_referer('upload_menu');
-
-		$jsonData = file_get_contents($_FILES['ppu-upload']['tmp_name']);
-		$data = json_decode($jsonData);
-
-		$this->handleMenuUpload($data->menu);
-	}
-
 	/**
-	 * Process products JSON
+	 * Allows JSON files to be uploaded in the admin menu instead of via API
 	 */
 	public function uploadJsonViaForm()
 	{
@@ -653,12 +657,14 @@ class PpuAdmin
 			case 'images':
 				break;
 		}
-		// TODO fix the redirect
 		wp_safe_redirect($_POST['_wp_http_referer']);
 	}
 
 	/**
-	 * Create an API client to handle uploads
+	 * Instantiate an API client to handle internal API calls to the WooCommerce REST API.
+	 * This client is used internally by the POST endpoints
+	 * The default timeout is 15sec, which is too short.  Therefore it was increased to 300sec.
+	 * It uses the WooCommerce key & secret that are created and saved in the plugins admin menu
 	 */
 	private function apiClient()
 	{
