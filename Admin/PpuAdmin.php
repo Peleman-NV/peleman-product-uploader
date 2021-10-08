@@ -89,6 +89,12 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * The GET attributes callback.
+	 * It returns all attributes as a JSON
+	 *
+	 * @return string
+	 */
 	public function getAttributes()
 	{
 		$api = $this->apiClient();
@@ -98,6 +104,7 @@ class PpuAdmin
 
 	/**	
 	 * Register get tags endpoint
+	 * For pagination, this takes an optional page number
 	 */
 	public function registerGetTagsEndpoint()
 	{
@@ -109,6 +116,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * The GET tags callback.
+	 * It returns all tags as a paginated JSON.
+	 *
+	 * @param array $request
+	 * @return string
+	 */
 	public function getTags($request)
 	{
 		$page = $request['page'];
@@ -134,6 +148,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * The GET images callback.
+	 * It returns all image infomration as a JSON.
+	 *
+	 * @param array $request
+	 * @return string
+	 */
 	public function getImages($request)
 	{
 		if (!empty($request['image_name'])) {
@@ -158,6 +179,13 @@ class PpuAdmin
 		wp_send_json($finalResult);
 	}
 
+
+	/**
+	 * It returns all image information as a JSON.
+	 *
+	 * @param string $imageId
+	 * @return string
+	 */
 	private function getImageInformation($imageId)
 	{
 		$imageInformation = wp_get_attachment_metadata($imageId);
@@ -172,6 +200,7 @@ class PpuAdmin
 
 	/**	
 	 * Register get categories endpoint
+	 * For pagination, this takes an optional page number
 	 */
 	public function registerGetCategoriesEndpoint()
 	{
@@ -183,6 +212,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * The GET categories callback.
+	 * It returns all categories as a paginated JSON.
+	 *
+	 * @param array $request
+	 * @return string
+	 */
 	public function getCategories($request)
 	{
 		$page = $request['page'];
@@ -197,6 +233,7 @@ class PpuAdmin
 
 	/**	
 	 * Register get products endpoint
+	 * For pagination, this takes an optional page number
 	 */
 	public function registerGetProductsEndpoint()
 	{
@@ -208,6 +245,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * The GET products callback.
+	 * It returns all products as a paginated JSON.
+	 *
+	 * @param string $request
+	 * @return array
+	 */
 	public function getProducts($request)
 	{
 		$page = $request['page'];
@@ -222,6 +266,7 @@ class PpuAdmin
 
 	/**	
 	 * Register get terms endpoint
+	 * For pagination, this takes an optional page number
 	 */
 	public function registerGetTermsEndpoint()
 	{
@@ -233,6 +278,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * The GET terms callback.
+	 * It returns all terms as a paginated JSON.
+	 *
+	 * @param array $request
+	 * @return string
+	 */
 	public function getTerms($request)
 	{
 		$page = $request['page'];
@@ -272,6 +324,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * The GET variations callback.
+	 * It returns all variations as a paginated JSON.
+	 *
+	 * @param array $request
+	 * @return string
+	 */
 	public function getProductVariations($request)
 	{
 		$productId = wc_get_product_id_by_sku($request['sku']);
@@ -298,6 +357,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Posts attributes. It passes the request items to the handler.
+	 * This function was made to be called by a HTML form.
+	 *
+	 * @param object $request
+	 * @return void
+	 */
 	public function postAttributes($request)
 	{
 		$items = json_decode($request->get_body())->items;
@@ -316,6 +382,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Posts tags. It passes the request items to the handler.
+	 * This function was made to be called by a HTML form.
+	 *
+	 * @param object $request
+	 * @return void
+	 */
 	public function postTags($request)
 	{
 		$items = json_decode($request->get_body())->items;
@@ -334,6 +407,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Posts categories. It passes the request items to the handler.
+	 * This function was made to be called by a HTML form.
+	 *
+	 * @param object $request
+	 * @return void
+	 */
 	public function postCategories($request)
 	{
 		$items = json_decode($request->get_body())->items;
@@ -352,6 +432,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Posts products. It passes the request items to the handler.
+	 * This function was made to be called by a HTML form.
+	 *
+	 * @param object $request
+	 * @return void
+	 */
 	public function postProducts($request)
 	{
 		$items = json_decode($request->get_body())->items;
@@ -370,6 +457,13 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Posts variations. It passes the request items to the handler.
+	 * This function was made to be called by a HTML form.
+	 *
+	 * @param object $request
+	 * @return void
+	 */
 	public function postVariations($request)
 	{
 		$items = json_decode($request->get_body())->items;
@@ -388,124 +482,17 @@ class PpuAdmin
 		));
 	}
 
+	/**
+	 * Posts terms.  It passes the request items to the handler.
+	 * This function was made to be called by a HTML form.
+	 *
+	 * @param object $request
+	 * @return void
+	 */
 	public function postTerms($request)
 	{
 		$items = json_decode($request->get_body())->items;
 		$this->handleAttributeTerms($items);
-	}
-
-	/**	
-	 * Register delete attributes endpoint
-	 */
-	public function registerDeleteAttributesEndpoint()
-	{
-		register_rest_route('ppu/v1', '/attributes/(?P<slug>\w+)', array(
-			'methods' => 'DELETE',
-			'callback' => array($this, 'deleteAttributes'),
-			'args' => array('slug'),
-			'permission_callback' => '__return_true'
-		));
-	}
-
-	public function deleteAttributes($request)
-	{
-		$slug = $request['slug'];
-		return $slug;
-	}
-
-	/**	
-	 * Register delete categories endpoint
-	 */
-	public function registerDeleteCategoriesEndpoint()
-	{
-		register_rest_route('ppu/v1', '/categories/(?P<slug>\w+)', array(
-			'methods' => 'DELETE',
-			'callback' => array($this, 'deleteCategories'),
-			'args' => array('slug'),
-			'permission_callback' => '__return_true'
-		));
-	}
-
-	public function deleteCategories($request)
-	{
-		$slug = $request['slug'];
-		return $slug;
-	}
-
-	/**	
-	 * Register delete tags endpoint
-	 */
-	public function registerDeleteTagsEndpoint()
-	{
-		register_rest_route('ppu/v1', '/tags/(?P<slug>\w+)', array(
-			'methods' => 'DELETE',
-			'callback' => array($this, 'deleteTags'),
-			'args' => array('slug'),
-			'permission_callback' => '__return_true'
-		));
-	}
-
-	public function deleteTags($request)
-	{
-		$slug = $request['slug'];
-		return $slug;
-	}
-
-	/**	
-	 * Register delete product endpoint
-	 */
-	public function registerDeleteProductsEndpoint()
-	{
-		register_rest_route('ppu/v1', '/product/(?P<sku>\w+)', array(
-			'methods' => 'DELETE',
-			'callback' => array($this, 'deleteProducts'),
-			'args' => array('sku'),
-			'permission_callback' => '__return_true'
-		));
-	}
-
-	public function deleteProducts($request)
-	{
-		$slug = $request['slug'];
-		return $slug;
-	}
-
-	/**	
-	 * Register delete terms endpoint
-	 */
-	public function registerDeleteTermsEndpoint()
-	{
-		register_rest_route('ppu/v1', '/terms/(?P<slug>\w+)', array(
-			'methods' => 'DELETE',
-			'callback' => array($this, 'deleteTerms'),
-			'args' => array('slug'),
-			'permission_callback' => '__return_true'
-		));
-	}
-
-	public function deleteTerms($request)
-	{
-		$slug = $request['slug'];
-		return $slug;
-	}
-
-	/**	
-	 * Register delete variations endpoint
-	 */
-	public function registerDeleteVariationsEndpoint()
-	{
-		register_rest_route('ppu/v1', '/variations/(?P<sku>\w+)', array(
-			'methods' => 'DELETE',
-			'callback' => array($this, 'deleteVariations'),
-			'args' => array('sku'),
-			'permission_callback' => '__return_true'
-		));
-	}
-
-	public function deleteVariations($request)
-	{
-		$slug = $request['slug'];
-		return $slug;
 	}
 
 	/**	
@@ -708,12 +695,10 @@ class PpuAdmin
 			$productId = wc_get_product_id_by_sku($item->sku);
 			$isNewProduct = ($productId === 0 || $productId === null);
 			$childProductId = null;
-			$isNewProduct = false;
-
 			// save the sku for the response 
 			$response_sku = $item->sku;
 
-			if (!$isParentProduct) { // 
+			if (!$isParentProduct) {
 				if ($productId === null || $productId === 0) {
 					$response['status'] = 'error';
 					$response['message'] = "Parent product not found (you are trying to upload a translated product, but I can't find its default language counterpart)";
@@ -1743,6 +1728,8 @@ class PpuAdmin
 	{
 		$response = [];
 		$createdMenus = [];
+		$items = $menu->items;
+
 		if ($createdMenu = $this->createMenuContainer($menu->name)) { // create menu container
 			$menuId = $createdMenu['menu_id'];
 			$menuName = $createdMenu['name'];
@@ -1754,10 +1741,10 @@ class PpuAdmin
 			wp_send_json($response, 400);
 		}
 
-		$parentItems = array_filter($menu->items, function ($item) {
+		$parentItems = array_filter($items, function ($item) {
 			return $item->parent_menu_item_name === '';
 		});
-		$childItems = array_filter($menu->items, function ($item) {
+		$childItems = array_filter($items, function ($item) {
 			return $item->parent_menu_item_name !== '';
 		});
 
