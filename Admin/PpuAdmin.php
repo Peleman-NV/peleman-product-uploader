@@ -1677,6 +1677,9 @@ class PpuAdmin
 
 	/**
 	 * Creates a WordPress menu
+	 * 
+	 * Creating a menu and a megamenu are 2 seperate things, but since a megamenu needs a menu,
+	 * the menu is created first.
 	 *
 	 * @param object $data
 	 * @return string
@@ -1684,6 +1687,7 @@ class PpuAdmin
 	public function handleMenuUpload($menu)
 	{
 		$response = [];
+		$errorsArray = [];
 		$createdMenus = [];
 		$items = $menu->items;
 
@@ -1698,6 +1702,7 @@ class PpuAdmin
 			wp_send_json($response, 400);
 		}
 
+		// divvy items up into parent- and child arrays depending on parent_item_menu_name being empty or not
 		$parentItems = array_filter($items, function ($item) {
 			return $item->parent_menu_item_name === '';
 		});
@@ -1706,19 +1711,10 @@ class PpuAdmin
 		});
 
 		foreach ($parentItems as $parent) { // create parent menu items
-			if (!is_int($parent->position) && empty($parent->position)) {
-				$response['status'] = 'error';
-				$response['message'] = "Position is missing for {$parent->menu_item_name}";
-				wp_send_json($response, 400);
-			}
 			$result = $this->create_menu_item($menuId, $parent);
-			// save upload item information to items metadata to use later
-			update_post_meta($result, 'peleman_mega_menu', $parent);
 			if (!is_int($result)) {
 				$response['status'] = 'error';
-				$response['message'] = "Problem creating parent item";
-				$response['menu_item_name'] = $parent->menu_item_name;
-				break;
+				$errorsArray[] = $result;
 			}
 		}
 
@@ -1730,20 +1726,21 @@ class PpuAdmin
 
 		$finalItemArray = [];
 		foreach ($childItems as $child) { // create child menu items
-			if (!is_int($child->position) && empty($child->position)) {
-				$response['status'] = 'error';
-				$response['message'] = "Position is missing for {$child->menu_item_name}";
-				wp_send_json($response, 400);
-			}
 			$parentId = $formattedCurrentMenuItemsArray[$child->parent_menu_item_name];
+			if (!is_int($parentId) || empty($parentId)) {
+				$response['status'] = 'error';
+				$errorsArray[] = [
+					'message' => "Could not determine parent for \"{$child->menu_item_name}\"",
+					'item' => $child,
+				];
+				continue;
+			}
+
 			$result = $this->create_menu_item($menuId, $child, $parentId);
-			// save upload item information to items metadata to use later
-			update_post_meta($result, 'peleman_mega_menu', $child);
+
 			if (!is_int($result)) {
 				$response['status'] = 'error';
-				$response['message'] = "Problem creating child item";
-				$response['menu_item_name'] = $child->menu_item_name;
-				break;
+				$errorsArray[] = $result;
 			}
 			$finalItemArray[] = ['childId' => $result, 'parentId' => $parentId];
 		}
@@ -1755,12 +1752,12 @@ class PpuAdmin
 		}
 
 		$this->joinCreatedMenus($createdMenus);
+		$response['errors'] = $errorsArray;
 
-		foreach ($response as $key => $value) {
-			if (isset($value) && $value === 'error') {
-				$this->deleteAllCreatedMenus($createdMenus);
-				wp_send_json($response, 400);
-			}
+		// what does this do?????
+		if (isset($response['errors']) && !empty($response['errors'])) {
+			$this->deleteAllCreatedMenus($createdMenus);
+			wp_send_json($response, 400);
 		}
 
 		// set menu as active and vertical
@@ -1849,6 +1846,16 @@ class PpuAdmin
 	 */
 	private function create_menu_item($menuId, $item, $parentId = 0)
 	{
+
+		if ((!is_int($item->position) || empty($item->position)) && $item->position !== 0) {
+			$response['status'] = 'error';
+			$response = [
+				'message' => "Could not determine position for \"{$item->menu_item_name}\"",
+				'item' => $item
+			];
+			return $response;
+		}
+
 		$menuObject = [
 			'menu-item-position' => $item->position,
 			'menu-item-status' => 'publish',
@@ -1861,11 +1868,9 @@ class PpuAdmin
 			// category menu item
 			$term = get_term_by('slug', $item->category_slug, 'product_cat');
 			if ($term === false) {
-				$response['status'] = 'error';
-				$response['message'] = "Error finding existing category";
-				$response['menu_item_name'] = $item->menu_item_name;
-				$response['item'] = $item->category_slug;
-				wp_send_json($response, 400);
+				$response['message'] = "Error finding category";
+				$response['item'] = $item;
+				return $response;
 			}
 
 			$menuObject['menu-item-type'] = 'taxonomy';
@@ -1875,11 +1880,9 @@ class PpuAdmin
 			// product menu item
 			$productId = wc_get_product_id_by_sku($item->product_sku);
 			if ($productId === 0) {
-				$response['status'] = 'error';
 				$response['message'] = "Error finding product";
-				$response['menu_item_name'] = $item->menu_item_name;
-				$response['item'] = $item->product_sku;
-				wp_send_json($response, 400);
+				$response['item'] = $item;
+				return $response;
 			}
 
 			$menuObject['menu-item-type'] = 'post_type';
@@ -1890,11 +1893,9 @@ class PpuAdmin
 			$menuObject['menu-item-type'] = 'custom';
 			$menuObject['menu-item-url'] = $item->custom_url;
 		} else {
-			$response['status'] = 'error';
 			$response['message'] = "Error defining menu item type";
-			$response['menu_item_name'] = $item->menu_item_name;
-			$response['item'] = $item->category_slug . ' ' . $item->custom_url . ' ' . $item->product_sku;
-			wp_send_json($response, 400);
+			$response['item'] = $item;
+			return $response;
 		}
 
 		try {
@@ -1903,9 +1904,11 @@ class PpuAdmin
 				0, // current menu item ID - 0 for new item,
 				$menuObject
 			);
+			// save upload item information to items metadata to use later
+			update_post_meta($response, 'peleman_mega_menu', $item);
 		} catch (\Throwable $th) {
-			$response['status'] = 'error';
 			$response['message'] = $th->getMessage();
+			return $response;
 		}
 
 		return $response;
