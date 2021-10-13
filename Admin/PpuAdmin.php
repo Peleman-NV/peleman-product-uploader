@@ -1920,10 +1920,10 @@ class PpuAdmin
 		foreach ($menuItemsArray as $parentId => $childArray) {
 			if (empty($childArray)) continue;
 			$parentSettingsArray = $this->createMegaMenuParentObjectString($childArray);
-			if ($this->addMenuObjectStringToPostMetaData($parentId, $parentSettingsArray) === false) {
+			// this relies on the existance of the CSS class 'mega-disablelink'
+			if ($this->addMenuObjectStringToPostMetaData($parentId, $parentSettingsArray, ['disablelink']) === false) {
 				return false;
 			}
-
 			foreach ($childArray as $childId) {
 				$childSettingsArray = $this->createMegaMenuChildObjectString($childId);
 				if ($this->addMenuObjectStringToPostMetaData($childId, $childSettingsArray) === false) {
@@ -1935,10 +1935,10 @@ class PpuAdmin
 		return true;
 	}
 
-	private function addMenuObjectStringToPostMetaData($id, $settingsArray)
+	private function addMenuObjectStringToPostMetaData($id, $settingsArray, $cssClasses = [''])
 	{
-		update_post_meta($id, '_megamenu', $settingsArray);
 		update_post_meta($id, '_menu_item_megamenu_col', 'columns-2');
+		update_post_meta($id, '_menu_item_classes', $cssClasses);
 		update_post_meta($id, '_menu_item_megamenu_col_tab', 'columns-1');
 		update_post_meta($id, '_menu_item_megamenu_icon_alignment', 'left');
 		update_post_meta($id, '_menu_item_megamenu_icon_size', 13);
@@ -1949,6 +1949,7 @@ class PpuAdmin
 		update_post_meta($id, '_menu_item_megamenu_icon_color', '');
 		update_post_meta($id, '_menu_item_megamenu_sublabel', '');
 		update_post_meta($id, '_menu_item_megamenu_sublabel_color', '');
+		update_post_meta($id, '_megamenu', $settingsArray);
 	}
 
 
@@ -1975,7 +1976,51 @@ class PpuAdmin
 			$childSettingsArray['styles'] = [
 				'enabled' => [
 					'menu_item_link_color' => '#333',
+					'menu_item_link_color_hover' => '#333',
 					'menu_item_link_weight' => 'bold'
+				],
+				'disabled' => [
+					'menu_item_link_text_decoration' => 'none',
+					'menu_item_border_color' => 'rgba(51, 51, 51, 0)',
+					'menu_item_background_from' => '#333',
+					'menu_item_background_to' => '#333',
+					'menu_item_background_hover_from' => '#333',
+					'menu_item_background_hover_to' => '#333',
+					'menu_item_link_weight_hover' => 'inherit',
+					'menu_item_font_size' => '0px',
+					'menu_item_link_text_align' => 'left',
+					'menu_item_link_text_transform' => 'none',
+					'menu_item_link_text_decoration_hover' => 'none',
+					'menu_item_border_color_hover' => '#333',
+					'menu_item_border_top' => '0px',
+					'menu_item_border_right' => '0px',
+					'menu_item_border_bottom' => '0px',
+					'menu_item_border_left' => '0px',
+					'menu_item_border_radius_top_left' => '0px',
+					'menu_item_border_radius_top_right' => '0px',
+					'menu_item_border_radius_bottom_right' => '0px',
+					'menu_item_border_radius_bottom_left' => '0px',
+					'menu_item_icon_size' => '0px',
+					'menu_item_icon_color' => '#333',
+					'menu_item_icon_color_hover' => '#333',
+					'menu_item_padding_left' => '0px',
+					'menu_item_padding_right' => '0px',
+					'menu_item_padding_top' => '0px',
+					'menu_item_padding_bottom' => '0px',
+					'menu_item_margin_left' => '0px',
+					'menu_item_margin_right' => '0px',
+					'menu_item_margin_top' => '0px',
+					'menu_item_margin_bottom' => '0px',
+					'menu_item_height' => '0px',
+					'panel_width' => '0px',
+					'panel_horizontal_offset' => '0px',
+					'panel_vertical_offset' => '0px',
+					'panel_background_from' => '#333',
+					'panel_background_to' => '#333',
+					'panel_background_image' => '0',
+					'panel_background_image_size' => 'auto',
+					'panel_background_image_repeat' => 'no-repeat',
+					'panel_background_image_position' => 'left top'
 				]
 			];
 		}
@@ -2046,6 +2091,7 @@ class PpuAdmin
 		if (!empty($navMenuItemGroups['columnThree'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($nrOfNavItemColumns, $navMenuItemGroups['columnThree']);
 
 		$columnSpan = $nrOfNavItemColumns > 2 ? 3 : 6;
+
 		$navColumnItemArray[] = [
 			"meta" => [
 				"span" => strval($columnSpan),
@@ -2055,6 +2101,7 @@ class PpuAdmin
 			],
 			"items" => [
 				[
+
 					"id" => "maxmegamenu_image_swap-40", // TODO this is dangerous to have hardcoded
 					"type" => "widget"
 				]
@@ -2098,7 +2145,6 @@ class PpuAdmin
 		foreach ($columnObjectArray as $key => $columnObjectItem) {
 			$columnObjectItemsArray[] = $this->createMegaMenuParentObjectColumnObjectItemArray($key);
 		}
-
 		$columnObjectItems = [
 			"meta" => [
 				"span" => strval($columnSpan),
@@ -2115,7 +2161,6 @@ class PpuAdmin
 	private function createMegaMenuParentObjectColumnObjectItemArray($menuObjectId)
 	{
 		return [
-
 			"id" => strval($menuObjectId),
 			"type" => "item"
 		];
