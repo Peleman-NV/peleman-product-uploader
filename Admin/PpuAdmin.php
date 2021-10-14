@@ -1919,7 +1919,8 @@ class PpuAdmin
 		$menuItemsArray = $this->createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray);
 		foreach ($menuItemsArray as $parentId => $childArray) {
 			if (empty($childArray)) continue;
-			$parentSettingsArray = $this->createMegaMenuParentObjectString($childArray);
+			$parentItemData = get_post_meta($parentId, "peleman_mega_menu", true);
+			$parentSettingsArray = $this->createMegaMenuParentObjectString($childArray, $parentItemData->column_widths);
 			// this relies on the existance of the CSS class 'mega-disablelink'
 			if ($this->addMenuObjectStringToPostMetaData($parentId, $parentSettingsArray, ['disablelink']) === false) {
 				return false;
@@ -2058,7 +2059,7 @@ class PpuAdmin
 	 * @param array $navMenuParentItemArray	Array of post item IDs aka nav menu item IDs
 	 * @return string
 	 */
-	private function createMegaMenuParentObjectString($navMenuParentItemArray)
+	private function createMegaMenuParentObjectString($navMenuParentItemArray, $columnWidths)
 	{
 		// add JSON item data to elements
 		$navMenuItemColumns = [];
@@ -2066,42 +2067,27 @@ class PpuAdmin
 			$navMenuItemColumns[$navMenuItem] = get_post_meta($navMenuItem, "peleman_mega_menu", true);
 		}
 
-		// divvy up into colums
+		// divvy up into columns
 		$navMenuItemGroups = [
 			'columnOne' => $this->divideIntoArrayOnColumnNumber($navMenuItemColumns, 1),
 			'columnTwo' => $this->divideIntoArrayOnColumnNumber($navMenuItemColumns, 2),
 			'columnThree' => $this->divideIntoArrayOnColumnNumber($navMenuItemColumns, 3),
 		];
 
-
-		$twoEmptyColumns = empty($navMenuItemGroups['columnTwo']);
-		$oneEmptyColumn = empty($navMenuItemGroups['columnThree']);
-
-		if ($twoEmptyColumns) {
-			$nrOfNavItemColumns = 1;
-		} else if ($oneEmptyColumn) {
-			$nrOfNavItemColumns = 2;
-		} else {
-			$nrOfNavItemColumns = 3;
-		}
-
 		$navColumnItemArray = [];
-		$navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($nrOfNavItemColumns, $navMenuItemGroups['columnOne']);
-		if (!empty($navMenuItemGroups['columnTwo'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($nrOfNavItemColumns, $navMenuItemGroups['columnTwo']);
-		if (!empty($navMenuItemGroups['columnThree'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($nrOfNavItemColumns, $navMenuItemGroups['columnThree']);
-
-		$columnSpan = $nrOfNavItemColumns > 2 ? 3 : 6;
+		$navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($columnWidths->one, $navMenuItemGroups['columnOne']);
+		if (!empty($navMenuItemGroups['columnTwo'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($columnWidths->two, $navMenuItemGroups['columnTwo']);
+		if (!empty($navMenuItemGroups['columnThree'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($columnWidths->three, $navMenuItemGroups['columnThree']);
 
 		$navColumnItemArray[] = [
 			"meta" => [
-				"span" => strval($columnSpan),
+				"span" => strval($columnWidths->four),
 				"class" => "",
 				"hide-on-desktop" => "false",
 				"hide-on-mobile" => "false",
 			],
 			"items" => [
 				[
-
 					"id" => "maxmegamenu_image_swap-40", // TODO this is dangerous to have hardcoded
 					"type" => "widget"
 				]
@@ -2138,16 +2124,15 @@ class PpuAdmin
 		return $settingsArray;
 	}
 
-	private function createMegaMenuParentObjectColumnString($nrOfColumns, $columnObjectArray)
+	private function createMegaMenuParentObjectColumnString($columnWidth, $columnObjectArray)
 	{
-		$columnSpan = $nrOfColumns > 1 ? 3 : 6;
 		$columnObjectItemsArray = [];
 		foreach ($columnObjectArray as $key => $columnObjectItem) {
 			$columnObjectItemsArray[] = $this->createMegaMenuParentObjectColumnObjectItemArray($key);
 		}
 		$columnObjectItems = [
 			"meta" => [
-				"span" => strval($columnSpan),
+				"span" => strval($columnWidth),
 				"class" => "",
 				"hide-on-desktop" => "false",
 				"hide-on-mobile" => "false",
