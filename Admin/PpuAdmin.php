@@ -523,6 +523,7 @@ class PpuAdmin
 
 		foreach ($data->images as $image) {
 			$filename = $image->name;
+			$imageName = $image->title;
 			$altText = $image->alt;
 			$contentText = $image->content;
 			$excerptText = $image->description;
@@ -538,7 +539,7 @@ class PpuAdmin
 
 			$attachment = array(
 				'post_mime_type' => $file_type,
-				'post_title'     => preg_replace('/\.[^.]+$/', '', basename($filename)),
+				'post_title'     => preg_replace('/\.[^.]+$/', '', basename($imageName)),
 				'post_content'   => $contentText,
 				'post_excerpt'   => $excerptText,
 				'post_status'    => 'inherit',
@@ -562,9 +563,8 @@ class PpuAdmin
 					$response['status'] = 'error';
 					$response['message'] = 'Image upload failed';
 					throw new \Exception('attach_data returned an empty array.');
-				} else {
-					wp_update_attachment_metadata($attachment_id, $attach_data);
 				}
+				wp_update_attachment_metadata($attachment_id, $attach_data);
 				$response['status'] = 'success';
 				$response['id'] = $attachment_id;
 				$response['image_path'] = get_post_meta($attachment_id, '_wp_attached_file', true);
