@@ -1681,7 +1681,7 @@ class PpuAdmin
 	 * Creating a menu and a megamenu are 2 seperate things, but since a megamenu needs a menu,
 	 * the menu is created first.
 	 *
-	 * @param object $data
+	 * @param object $data	
 	 * @return string
 	 */
 	public function handleMenuUpload($menu)
@@ -1690,6 +1690,7 @@ class PpuAdmin
 		$errorsArray = [];
 		$createdMenus = [];
 		$items = $menu->items;
+		$isTranslatedMenu = $menu->lang !== '' && $menu->lang !== 'en';
 
 		if ($createdMenu = $this->createMenuContainer($menu->name)) { // create menu container
 			$menuId = $createdMenu['menu_id'];
@@ -1755,9 +1756,16 @@ class PpuAdmin
 		$response['errors'] = $errorsArray;
 
 		// what does this do?????
-		if (isset($response['errors']) && !empty($response['errors'])) {
+		if (isset($response['error']) && !empty($response['error'])) {
 			$this->deleteAllCreatedMenus($createdMenus);
 			wp_send_json($response, 400);
+		}
+
+		if ($isTranslatedMenu) {
+			$term = get_term_by('name', $menu->parent_menu_name, 'nav_menu');
+			$parentMenuId = $term->term_id;
+			// join current table with parent
+			$this->joinTranslatedMenuWithDefaultMenu($menuId, $menu->lang, $parentMenuId);
 		}
 
 		// set menu as active and vertical
@@ -1772,6 +1780,15 @@ class PpuAdmin
 		wp_send_json($response, 200);
 	}
 
+	private function joinTranslatedMenuWithDefaultMenu($createdMenuId, $menuLanguage, $parentMenuId)
+	{
+		global $wpdb;
+		$sql = "SELECT trid FROM {$wpdb->prefix}icl_translations where element_id = " . $parentMenuId . " and element_type = \"tax_nav_menu\";";
+		$result = $wpdb->get_results($sql);
+		$trid = $result[0]->trid;
+		$updateQuery = "UPDATE {$wpdb->prefix}icl_translations SET trid = " . $trid . ", language_code = \"" . $menuLanguage . "\", source_language_code = \"en\" WHERE element_id = " . $createdMenuId . " AND element_type = \"tax_nav_menu\";";
+		$wpdb->get_results($updateQuery);
+	}
 	/**
 	 * Creates a menu container (in wp_terms table)
 	 *
@@ -1781,14 +1798,12 @@ class PpuAdmin
 	private function createMenuContainer($name)
 	{
 		if (empty($name)) return false;
-
-		$uniqueMenuName = $name . '_' . time();
-		$menuId = wp_create_nav_menu($uniqueMenuName);
+		$menuId = wp_create_nav_menu($name);
 
 		if (isset($menuId->errors)) {
 			return false;
 		}
-		return ['menu_id' => $menuId, 'name' => $uniqueMenuName];
+		return ['menu_id' => $menuId, 'name' => $name];
 	}
 
 	private function joinCreatedMenus($menuArray)
@@ -1888,7 +1903,7 @@ class PpuAdmin
 			$menuObject['menu-item-type'] = 'post_type';
 			$menuObject['menu-item-object'] = 'product';
 			$menuObject['menu-item-object-id'] = $productId;
-		} else if (empty($item->category_slug) && !empty($item->custom_url) && empty($item->product_sku)) {
+		} else if (empty($item->category_slug) && !empty($item->custom_url) && empty($item->product_sku) || $item->heading_text === true) {
 			// custom menu item
 			$menuObject['menu-item-type'] = 'custom';
 			$menuObject['menu-item-url'] = $item->custom_url;
@@ -1917,25 +1932,44 @@ class PpuAdmin
 	private function createMegaMenu($parentItemArray, $completeMenuItemArray)
 	{
 		$menuItemsArray = $this->createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray);
+		$imageSwapWidgetId = 38;  // This is dangerous to have hardcoded.
+		/**
+		 * Issue: each parent has an image swap widget.  This has to be unique to the parent.
+		 * Both parents and children use it to display images.
+		 * Creating one in code is beyond my capabilities (not really, but I'm outta here in 3 weeks and I got shit to do)
+		 * I'm using widgets that already exist - I know they start at 38 and go up to at least 51.
+		 */
+
 		foreach ($menuItemsArray as $parentId => $childArray) {
 			if (empty($childArray)) continue;
 			$parentItemData = get_post_meta($parentId, "peleman_mega_menu", true);
-			$parentSettingsArray = $this->createMegaMenuParentObjectString($childArray, $parentItemData->column_widths);
+
+			$parentSettingsArray = $this->createMegaMenuParentObjectString($childArray, $parentItemData->column_widths, $imageSwapWidgetId);
 			// this relies on the existance of the CSS class 'mega-disablelink'
 			if ($this->addMenuObjectStringToPostMetaData($parentId, $parentSettingsArray, ['disablelink']) === false) {
 				return false;
 			}
 			foreach ($childArray as $childId) {
 				$childSettingsArray = $this->createMegaMenuChildObjectString($childId);
+
 				if ($this->addMenuObjectStringToPostMetaData($childId, $childSettingsArray) === false) {
 					return false;
 				}
 			}
+			$imageSwapWidgetId++;
 		}
 
 		return true;
 	}
 
+	/**
+	 * Updates a nav menu item's metadata
+	 *
+	 * @param int $id
+	 * @param array $settingsArray
+	 * @param array $cssClasses
+	 * @return void
+	 */
 	private function addMenuObjectStringToPostMetaData($id, $settingsArray, $cssClasses = [''])
 	{
 		update_post_meta($id, '_menu_item_megamenu_col', 'columns-2');
@@ -1973,7 +2007,18 @@ class PpuAdmin
 		}
 
 		$childSettingsArray["type"] = "grid";
+
+
 		if ($isHeading) {
+			if (
+				!empty($jsonItemInformation->category_slug)
+				|| !empty($jsonItemInformation->custom_url)
+				|| !empty($jsonItemInformation->product_sku)
+			) {
+				$childSettingsArray['disable_link'] = 'false';
+			} else {
+				$childSettingsArray['disable_link'] = 'true';
+			}
 			$childSettingsArray['styles'] = [
 				'enabled' => [
 					'menu_item_link_color' => '#333',
@@ -2006,7 +2051,6 @@ class PpuAdmin
 					'menu_item_icon_color_hover' => '#333',
 					'menu_item_padding_left' => '0px',
 					'menu_item_padding_right' => '0px',
-					'menu_item_padding_top' => '0px',
 					'menu_item_padding_bottom' => '0px',
 					'menu_item_margin_left' => '0px',
 					'menu_item_margin_right' => '0px',
@@ -2024,6 +2068,9 @@ class PpuAdmin
 					'panel_background_image_position' => 'left top'
 				]
 			];
+			if ($jsonItemInformation->position !== 1) {
+				$childSettingsArray['styles']['enabled']['menu_item_padding_top'] = '10px';
+			}
 		}
 		if ($childImageId !== 0) {
 			$childSettingsArray['image_swap'] = [
@@ -2059,7 +2106,7 @@ class PpuAdmin
 	 * @param array $navMenuParentItemArray	Array of post item IDs aka nav menu item IDs
 	 * @return string
 	 */
-	private function createMegaMenuParentObjectString($navMenuParentItemArray, $columnWidths)
+	private function createMegaMenuParentObjectString($navMenuParentItemArray, $columnWidths, $imageSwapWidgetId)
 	{
 		// add JSON item data to elements
 		$navMenuItemColumns = [];
@@ -2088,7 +2135,7 @@ class PpuAdmin
 			],
 			"items" => [
 				[
-					"id" => "maxmegamenu_image_swap-40", // TODO this is dangerous to have hardcoded
+					"id" => "maxmegamenu_image_swap-{$imageSwapWidgetId}",
 					"type" => "widget"
 				]
 			]
