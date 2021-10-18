@@ -1932,24 +1932,12 @@ class PpuAdmin
 	private function createMegaMenu($parentItemArray, $completeMenuItemArray)
 	{
 		$menuItemsArray = $this->createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray);
-		$megaMenuImageSwapWidgets = get_option('widget_maxmegamenu_image_swap', true);
 
 		foreach ($menuItemsArray as $parentId => $childArray) {
 			if (empty($childArray)) continue;
 
-			$firstChildImageId = $this->getFirstChildImageId($childArray);
-			array_push($megaMenuImageSwapWidgets, [
-				'media_file_id' => $firstChildImageId,
-				'media_file_size' => 'full',
-				'wpml_language' => 'all',
-			]);
-
 			$parentItemData = get_post_meta($parentId, "peleman_mega_menu", true);
-			$parentSettingsArray = $this->createMegaMenuParentObjectString(
-				$childArray,
-				$parentItemData->column_widths,
-				'maxmegamenu_image_swap-' . array_key_last($megaMenuImageSwapWidgets)
-			);
+			$parentSettingsArray = $this->createMegaMenuParentObjectString($childArray, $parentItemData->column_widths);
 
 			// this relies on the existance of the CSS class 'mega-disablelink'
 			if ($this->addMenuObjectStringToPostMetaData($parentId, $parentSettingsArray, ['disablelink']) === false) {
@@ -1963,30 +1951,8 @@ class PpuAdmin
 				}
 			}
 		}
-		update_option('widget_maxmegamenu_image_swap', $megaMenuImageSwapWidgets);
 
 		return true;
-	}
-
-	/**
-	 * Given an array of child items, get the first image ID from it
-	 *
-	 * @param array $childArray
-	 * @return int|null
-	 */
-	private function getFirstChildImageId($childArray)
-	{
-		$childImageId = null;
-		foreach ($childArray as $child) {
-			if (is_null($child['imageId'])) {
-				continue;
-			} else {
-				$childImageId = $child['imageId'];
-				break;
-			}
-		}
-
-		return $childImageId;
 	}
 
 	/**
@@ -2133,7 +2099,7 @@ class PpuAdmin
 	 * @param array $navMenuParentItemArray	Array of post item IDs aka nav menu item IDs
 	 * @return string
 	 */
-	private function createMegaMenuParentObjectString($navMenuChildItemArray, $columnWidths, $imageSwapWidgetName)
+	private function createMegaMenuParentObjectString($navMenuChildItemArray, $columnWidths /*, $imageSwapWidgetName*/)
 	{
 		// add JSON item data to elements
 		$navMenuItemColumns = [];
@@ -2152,6 +2118,8 @@ class PpuAdmin
 		$navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($columnWidths->one, $navMenuItemGroups['columnOne']);
 		if (!empty($navMenuItemGroups['columnTwo'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($columnWidths->two, $navMenuItemGroups['columnTwo']);
 		if (!empty($navMenuItemGroups['columnThree'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnString($columnWidths->three, $navMenuItemGroups['columnThree']);
+
+		$imageSwapWidgetName = $this->updateMegaMenuImageSwapWidgets($navMenuItemGroups['columnOne']);
 
 		$navColumnItemArray[] = [
 			"meta" => [
@@ -2196,6 +2164,41 @@ class PpuAdmin
 		];
 
 		return $settingsArray;
+	}
+
+	private function updateMegaMenuImageSwapWidgets($columnArray)
+	{
+		$firstChildImageId = $this->getFirstChildImageId($columnArray);
+
+		$megaMenuImageSwapWidgets = get_option('widget_maxmegamenu_image_swap', true);
+		array_push($megaMenuImageSwapWidgets, [
+			'media_file_id' => $firstChildImageId,
+			'media_file_size' => 'full',
+			'wpml_language' => 'all',
+		]);
+		update_option('widget_maxmegamenu_image_swap', $megaMenuImageSwapWidgets);
+
+		return 'maxmegamenu_image_swap-' . array_key_last($megaMenuImageSwapWidgets);
+	}
+
+
+	/**
+	 * Given an array of child items, get the first image ID from it
+	 *
+	 * @param array $childArray
+	 * @return int|null
+	 */
+	private function getFirstChildImageId($columnArray)
+	{
+		foreach ($columnArray as $arrayElement) {
+			if (is_null($arrayElement->product_sku) || empty($arrayElement->product_sku)) {
+				continue;
+			} else {
+				$product = wc_get_product(wc_get_product_id_by_sku($arrayElement->product_sku));
+
+				return $product->get_image_id();
+			}
+		}
 	}
 
 	private function createMegaMenuParentObjectColumnString($columnWidth, $columnObjectArray)
@@ -2248,16 +2251,7 @@ class PpuAdmin
 		// loop over each menu item Id and, if it's parent is matched in the parentItemIdArray,
 		// push IT'S Id under that parent
 		foreach ($completeMenuItemArray as $menuItem) {
-			$itemInformation = [
-				'item' => $menuItem->ID
-			];
-			if ($menuItem->object === 'product') {
-				$product =  wc_get_product($menuItem->object_id);
-				$itemInformation['imageId'] = $product->get_image_id();
-			}
-
-			// array_push($menuItemsArray[$menuItem->menu_item_parent], $menuItem->ID);
-			array_push($menuItemsArray[$menuItem->menu_item_parent], $itemInformation);
+			array_push($menuItemsArray[$menuItem->menu_item_parent], ['item' => $menuItem->ID]);
 		}
 
 		return $menuItemsArray;
