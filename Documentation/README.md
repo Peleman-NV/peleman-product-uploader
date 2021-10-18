@@ -20,7 +20,7 @@ It is built using an OOP WordPress plugin skeleton ([Github repo](https://github
     -   js
     -   partials
         -   ppu-menu.php: the plugins admin settings page
-    -   PpuAdmin.php: this contains all the plugin functionality. Refer to the file itself and PHPDocBlocks for each function
+    -   PpuAdmin.php: this contains all the plugin functionality. Refer to the file itself and PHPDocBlocks for each function and below for some context.
     -   index.php: a catch-all page in case visitors try to access it directly (the server _should_ prevent this)
 
 -   Documentation: contains documentation
@@ -39,3 +39,23 @@ It is built using an OOP WordPress plugin skeleton ([Github repo](https://github
 -   index.php: a catch-all page in case visitors try to access it directly (the server _should_ prevent this)
 -   pelemanProductUploader.php: the entrypoint for the plugin. Everything starts here, with the function call on the last line. All plugin constants should be defined here.
 -   uninstall.php: fired when the plugin is uninstalled
+
+## PpuAdmin.php file
+
+For this plugin, all the custom functionality can be found here. The plugin exposes a number of API endpoints (not RESTful) to upload and download items. The items are:
+
+-   tags
+-   categories
+-   attributes
+-   terms
+-   images
+-   products
+-   product variations
+-   menus (also, mega menus)
+
+The functions are:
+
+-   the constructor, style/script/admin page/plugin options loading & registering, apiClient instantiation;
+-   registering endpoints (`register_rest_route()`)
+-   callbacks for the registered endpoints
+-   utility classes for the callbacks
