@@ -556,8 +556,8 @@ class PpuAdmin
 
 			try {
 				$attachment_id = wp_insert_attachment($attachment, $upload_dir['path'] . '/' . $filename, 0, true);
-				!empty($altText) ? update_post_meta($attachment_id, '_wp_attachment_image_alt', $altText) : '';
 				$attach_data = wp_generate_attachment_metadata($attachment_id, $upload_path . $filename);
+				!empty($altText) ? update_post_meta($attachment_id, '_wp_attachment_image_alt', $altText) : '';
 
 				if (empty($attach_data)) {
 					$response['status'] = 'error';
@@ -1932,34 +1932,61 @@ class PpuAdmin
 	private function createMegaMenu($parentItemArray, $completeMenuItemArray)
 	{
 		$menuItemsArray = $this->createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray);
-		$imageSwapWidgetId = 38;  // This is dangerous to have hardcoded.
-		/**
-		 * Issue: each parent has an image swap widget.  This has to be unique to the parent.
-		 * Both parents and children use it to display images.
-		 * Creating one in code is beyond my capabilities (not really, but I'm outta here in 3 weeks and I got shit to do)
-		 * I'm using widgets that already exist - I know they start at 38 and go up to at least 51.
-		 */
+		$megaMenuImageSwapWidgets = get_option('widget_maxmegamenu_image_swap', true);
 
 		foreach ($menuItemsArray as $parentId => $childArray) {
 			if (empty($childArray)) continue;
-			$parentItemData = get_post_meta($parentId, "peleman_mega_menu", true);
 
-			$parentSettingsArray = $this->createMegaMenuParentObjectString($childArray, $parentItemData->column_widths, $imageSwapWidgetId);
+			$firstChildImageId = $this->getFirstChildImageId($childArray);
+			array_push($megaMenuImageSwapWidgets, [
+				'media_file_id' => $firstChildImageId,
+				'media_file_size' => 'full',
+				'wpml_language' => 'all',
+			]);
+
+			$parentItemData = get_post_meta($parentId, "peleman_mega_menu", true);
+			$parentSettingsArray = $this->createMegaMenuParentObjectString(
+				$childArray,
+				$parentItemData->column_widths,
+				'maxmegamenu_image_swap-' . array_key_last($megaMenuImageSwapWidgets)
+			);
+
 			// this relies on the existance of the CSS class 'mega-disablelink'
 			if ($this->addMenuObjectStringToPostMetaData($parentId, $parentSettingsArray, ['disablelink']) === false) {
 				return false;
 			}
-			foreach ($childArray as $childId) {
-				$childSettingsArray = $this->createMegaMenuChildObjectString($childId);
+			foreach ($childArray as $child) {
+				$childSettingsArray = $this->createMegaMenuChildObjectString($child['item']);
 
-				if ($this->addMenuObjectStringToPostMetaData($childId, $childSettingsArray) === false) {
+				if ($this->addMenuObjectStringToPostMetaData($child['item'], $childSettingsArray) === false) {
 					return false;
 				}
 			}
-			$imageSwapWidgetId++;
 		}
+		update_option('widget_maxmegamenu_image_swap', $megaMenuImageSwapWidgets);
 
 		return true;
+	}
+
+	/**
+	 * Given an array of child items, get the first image ID from it
+	 *
+	 * @param array $childArray
+	 * @return int|null
+	 */
+	private function getFirstChildImageId($childArray)
+	{
+		$childImageId = null;
+		foreach ($childArray as $child) {
+			if (is_null($child['imageId'])) {
+				continue;
+			} else {
+				$childImageId = $child['imageId'];
+				break;
+			}
+		}
+
+		return $childImageId;
 	}
 
 	/**
@@ -2106,12 +2133,12 @@ class PpuAdmin
 	 * @param array $navMenuParentItemArray	Array of post item IDs aka nav menu item IDs
 	 * @return string
 	 */
-	private function createMegaMenuParentObjectString($navMenuParentItemArray, $columnWidths, $imageSwapWidgetId)
+	private function createMegaMenuParentObjectString($navMenuChildItemArray, $columnWidths, $imageSwapWidgetName)
 	{
 		// add JSON item data to elements
 		$navMenuItemColumns = [];
-		foreach ($navMenuParentItemArray as $navMenuItem) {
-			$navMenuItemColumns[$navMenuItem] = get_post_meta($navMenuItem, "peleman_mega_menu", true);
+		foreach ($navMenuChildItemArray as $navMenuItem) {
+			$navMenuItemColumns[$navMenuItem['item']] = get_post_meta($navMenuItem['item'], "peleman_mega_menu", true);
 		}
 
 		// divvy up into columns
@@ -2135,7 +2162,7 @@ class PpuAdmin
 			],
 			"items" => [
 				[
-					"id" => "maxmegamenu_image_swap-{$imageSwapWidgetId}",
+					"id" => $imageSwapWidgetName,
 					"type" => "widget"
 				]
 			]
@@ -2199,7 +2226,7 @@ class PpuAdmin
 	}
 
 	/**
-	 * A helper function that gives an array of parent item ID's with their child ID's
+	 * A helper function that returns an array of parent item ID's keys with as value, an array of their child ID's & image ID's if present
 	 *
 	 * @param array $parentItemArray
 	 * @param array $completeMenuItemArray
@@ -2207,17 +2234,30 @@ class PpuAdmin
 	 */
 	private function createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray)
 	{
+		// reduce array of parent items to array of parent item ID's
 		$parentIdArray = array_map(function ($el) {
 			return $el->ID;
 		}, $parentItemArray);
 
+		// take previous array and create array with parent ID's as key with empty arrays as values
 		$menuItemsArray = [];
 		foreach ($parentIdArray as $key => $value) {
 			$menuItemsArray[$value] = [];
 		}
 
+		// loop over each menu item Id and, if it's parent is matched in the parentItemIdArray,
+		// push IT'S Id under that parent
 		foreach ($completeMenuItemArray as $menuItem) {
-			array_push($menuItemsArray[$menuItem->menu_item_parent], $menuItem->ID);
+			$itemInformation = [
+				'item' => $menuItem->ID
+			];
+			if ($menuItem->object === 'product') {
+				$product =  wc_get_product($menuItem->object_id);
+				$itemInformation['imageId'] = $product->get_image_id();
+			}
+
+			// array_push($menuItemsArray[$menuItem->menu_item_parent], $menuItem->ID);
+			array_push($menuItemsArray[$menuItem->menu_item_parent], $itemInformation);
 		}
 
 		return $menuItemsArray;
