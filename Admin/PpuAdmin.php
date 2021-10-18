@@ -1027,7 +1027,6 @@ class PpuAdmin
 	 */
 	private function handleCategoriesAndTags($dataArray, $shortObjectName, $longObjectName)
 	{
-		$scriptTimerService = new ScriptTimerService();
 		$finalResponse = array();
 		$iclType = $shortObjectName === 'cat' ? 'category' : 'post_tag';
 
@@ -1052,12 +1051,11 @@ class PpuAdmin
 							$tempResponse['status'] = 'error';
 							$tempResponse['message'] = "error encountered updating terms & terms taxonomy in database";
 						} else {
-							// get taxonomyId
-
 							global $wpdb;
 							$term_taxonomy = $wpdb->get_results("SELECT term_taxonomy_id FROM " . $wpdb->prefix . "term_taxonomy WHERE taxonomy = 'product_{$shortObjectName}' AND term_id = {$translatedObjectTermId};")[0];
 
 							$this->joinTranslatedTagOrCategoryWithParent($parentObject, $item, $term_taxonomy->term_taxonomy_id, $shortObjectName);
+							$this->updateOrAddCategoryOrTagSeoData($shortObjectName, $translatedObjectTermId, $item->seo);
 							$response['term_id'] = $translatedObjectTermId;
 							$response['term_taxonomy_id'] = $term_taxonomy->term_taxonomy_id;
 							$tempResponse['action'] = 'modify child ' . $longObjectName;
@@ -1071,17 +1069,21 @@ class PpuAdmin
 							'slug' => $slug
 						));
 						$this->joinTranslatedTagOrCategoryWithParent($parentObject, $item, $response['term_taxonomy_id'], $shortObjectName);
+						$this->updateOrAddCategoryOrTagSeoData($shortObjectName, $response['term_taxonomy_id'], $item->seo);
 						$tempResponse['action'] = 'create child ' . $longObjectName;
 					}
-				} else {
+				} else { // parent
 					$object = get_term_by('slug', $item->slug, 'product_' . $shortObjectName);
 					// item already exists
 					if ($object) {
-						$response = wp_update_term($object->term_id, 'product_' . $shortObjectName, array(
+						$objectId = $object->term_id;
+						$response = wp_update_term($objectId, 'product_' . $shortObjectName, array(
 							'name' => $item->name,
 							'description' => $item->description,
 						));
 						$tempResponse['action'] = 'modify parent ' . $longObjectName;
+						// SEO data
+						$this->updateOrAddCategoryOrTagSeoData($shortObjectName, $objectId, $item->seo);
 					}
 					// new item
 					if (!$object) {
@@ -1090,6 +1092,8 @@ class PpuAdmin
 							'description' => $item->description,
 							'slug'    => $item->slug
 						));
+						// SEO data
+						$this->updateOrAddCategoryOrTagSeoData($shortObjectName, $response['term_id'], $item->seo);
 						$tempResponse['action'] = 'create parent ' . $longObjectName;
 					}
 				}
@@ -1116,9 +1120,19 @@ class PpuAdmin
 			$response = array();
 		}
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
-		$scriptTimerService->stopAndLogDuration(__FUNCTION__, __DIR__);
 
 		wp_send_json($finalResponse, $statusCode);
+	}
+
+	private function updateOrAddCategoryOrTagSeoData($shortObjectName, $objectId, $seoData)
+	{
+		$currentSeoMetaData = get_option('wpseo_taxonomy_meta');
+		$type = $shortObjectName === 'cat' ? 'product_cat' : 'product_tag';
+
+		$currentSeoMetaData[$type][$objectId]['wpseo_focuskw'] = $seoData->focus_keyword;
+		$currentSeoMetaData[$type][$objectId]['wpseo_desc'] = $seoData->description;
+
+		update_option('wpseo_taxonomy_meta', $currentSeoMetaData);
 	}
 
 	private function joinTranslatedTagOrCategoryWithParent($parentObject, $item, $termTaxonomyId, $shortObjectName)
