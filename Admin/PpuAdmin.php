@@ -965,6 +965,7 @@ class PpuAdmin
 
 	/**
 	 * Creates a YITH JSON string for a YouTube video
+	 * TODO: the JSON string is actually a serialised array - it should be treated as such.
 	 *
 	 * @param int $iterator
 	 * @param int $attachmentId
