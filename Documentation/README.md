@@ -9,6 +9,7 @@ It is built using an OOP WordPress plugin skeleton ([Github repo](https://github
 
 -   place this plugin in the WordPress plugin folder: wp-content/plugins/ Then, go to the admin panel > Plugins, and activate it. After installation, a menu item is created for the plugin, where additional setup can be done.
 -   API keys: go to WooCommerce > Settings > Advanced > REST API > Add Key. Copy these keys (key & secret) to this plugins menu. **If these values are already filled in, this means the WordPress installation was copied from a previous one - this hasn't been a problem in the past and these existing keys can continue to be used**
+-   Imaxel keys: you can copy these from previous installations. If required, you can contact Imaxel for new keys.
 -   server settings: slow API uploads (or 503 errors, timeouts, etc) can be due to insufficient RAM/CPU's. In the past upgrading this has helped.
 
 ## Plugin file structure
