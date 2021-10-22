@@ -886,7 +886,7 @@ class PpuAdmin
 				} catch (\Throwable $th) {
 					$response['status'] = 'error';
 					$response['message'] = $th->getMessage();
-					$response['error_detail'] = json_decode($th->getResponse()->getBody(), true) ?? null;
+					$response['error_detail'] = $item ?? null;
 				}
 			}
 
@@ -1341,7 +1341,7 @@ class PpuAdmin
 					} catch (\Throwable $th) {
 						$response['status'] = 'error';
 						$response['message'] = $th->getMessage();
-						$response['error_detail'] = json_decode($th->getResponse()->getBody(), true) ?? null;
+						$response['error_detail'] = $variation ?? null;
 					}
 				}
 				if ($response['status'] == 'success') {
