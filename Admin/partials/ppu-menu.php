@@ -11,12 +11,15 @@
     <p>The base URL for the API endpoints is: <strong><?= get_site_url(); ?>/wp-json/ppu/v1/</strong>.
     </p>
     <hr>
-    <h2>Enter your WooCommerce API keys here</h2>
+    <h2>Plugins keys</h2>
     <form method="POST" action="options.php">
         <?php
         settings_fields('ppu_custom_settings');
         do_settings_sections('ppu_custom_settings');
         ?>
+        <h3>
+            Required for the plugin to internally call the WooCommerce REST API
+        </h3>
         <div class="form-row">
             <div class="grid-medium-column">
                 <label for="ppu-wc-key">WooCommerce key</label>
@@ -31,6 +34,20 @@
             </div>
             <div class="grid-large-column">
                 <input type="text" id="ppu-wc-secret" name="ppu-wc-secret" value="<?= get_option('ppu-wc-secret'); ?>" placeholder="WooCommerce secret">
+            </div>
+        </div>
+        <h3>
+            Add a "Peleman-Auth" HTTP header with the following value to all API calls
+        </h3>
+        <div class="form-row">
+            <div class="grid-medium-column">
+                <label for="ppu-peleman-authorization-key">REST API authentication</label>
+            </div>
+            <div class="grid-large-column-with-button">
+                <input class="inline" type="text" id="ppu-peleman-authorization-key" name="ppu-peleman-authorization-key" value="<?= get_option('ppu-peleman-authorization-key'); ?>" placeholder="Authentication key">
+                <div class="inline">
+                    <button id="generate-peleman-auth-key" type="button" class="ppu-button ppu-button-secondary inline">Generate</button>
+                </div>
             </div>
         </div>
         <button type="submit" class="button button-primary">Save changes</button>

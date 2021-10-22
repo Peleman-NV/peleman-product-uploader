@@ -39,7 +39,8 @@ class PpuAdmin
 	 */
 	public function enqueue_styles()
 	{
-		wp_enqueue_style($this->plugin_name, plugin_dir_url(__FILE__) . 'css/style.css', array(), $this->version, 'all');
+		$randomVersionNumber = rand(1, 1000);
+		wp_enqueue_style($this->plugin_name, plugin_dir_url(__FILE__) . 'css/style.css', array(), $randomVersionNumber, 'all');
 	}
 
 	/**
@@ -47,7 +48,8 @@ class PpuAdmin
 	 */
 	public function enqueue_scripts()
 	{
-		//wp_enqueue_script($this->plugin_name, plugin_dir_url(__FILE__) . 'js/admin-ui.js', array('jquery'), $this->version, true);
+		$randomVersionNumber = rand(1, 1000);
+		wp_enqueue_script($this->plugin_name, plugin_dir_url(__FILE__) . 'js/admin-ui.js', array('jquery'), $randomVersionNumber, true);
 	}
 
 	/**
@@ -74,6 +76,49 @@ class PpuAdmin
 	{
 		register_setting('ppu_custom_settings', 'ppu-wc-key');
 		register_setting('ppu_custom_settings', 'ppu-wc-secret');
+		register_setting('ppu_custom_settings', 'ppu-peleman-authorization-key');
+	}
+
+	/**
+	 * Instantiate an API client to handle internal API calls to the WooCommerce REST API.
+	 * This client is used internally by the POST endpoints
+	 * The default timeout is 15sec, which is too short.  Therefore it was increased to 300sec.
+	 * It uses the WooCommerce key & secret that are created and saved in the plugins admin menu
+	 */
+	private function apiClient()
+	{
+		$siteUrl = get_site_url();
+		return new Client(
+			$siteUrl,
+			get_option('ppu-wc-key'),
+			get_option('ppu-wc-secret'),
+			[
+				'wp_api' => true,
+				'version' => 'wc/v3',
+				'timeout' => 300,
+			]
+		);
+	}
+
+	/**
+	 * Performs simple authorization.
+	 * Function compares the Peleman-Auth HTTP header to ppu-peleman-authorization-key
+	 * In case of a mismatch, it returns a 401 and stops execution
+	 *
+	 * @param string $header
+	 * @return void
+	 */
+	private function validateHeader($header)
+	{
+		$authKey = get_option('ppu-peleman-authorization-key');
+
+		if ($header !== $authKey) {
+			$statusCode = 401;
+			$response['status'] = 'error';
+			$response['message'] = 'You are not authorized to use this resource';
+
+			wp_send_json($response, $statusCode);
+		}
 	}
 
 	/**	
@@ -96,6 +141,8 @@ class PpuAdmin
 	 */
 	public function getAttributes()
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$api = $this->apiClient();
 		$endpoint = 'products/attributes/';
 		return $api->get($endpoint);
@@ -124,6 +171,8 @@ class PpuAdmin
 	 */
 	public function getTags($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$page = $request['page'];
 		if (!isset($page) || $page == '') $page = 1;
 		$api = $this->apiClient();
@@ -156,6 +205,8 @@ class PpuAdmin
 	 */
 	public function getImages($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		if (!empty($request['image_name'])) {
 			$imageName = $request['image_name'];
 			if (!$this->getImageIdByName($imageName)) {
@@ -187,6 +238,8 @@ class PpuAdmin
 	 */
 	private function getImageInformation($imageId)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$imageInformation = wp_get_attachment_metadata($imageId);
 
 		return array(
@@ -220,6 +273,8 @@ class PpuAdmin
 	 */
 	public function getCategories($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$page = $request['page'];
 		if (!isset($page) || $page == '') $page = 1;
 		$api = $this->apiClient();
@@ -253,6 +308,8 @@ class PpuAdmin
 	 */
 	public function getProducts($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$page = $request['page'];
 		if (!isset($page) || $page == '') $page = 1;
 		$api = $this->apiClient();
@@ -286,6 +343,8 @@ class PpuAdmin
 	 */
 	public function getTerms($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$page = $request['page'];
 		if (!isset($page) || $page == '') $page = 1;
 		$api = $this->apiClient();
@@ -332,6 +391,8 @@ class PpuAdmin
 	 */
 	public function getProductVariations($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$productId = wc_get_product_id_by_sku($request['sku']);
 		$page = $request['page'];
 		if (!isset($page) || $page == '') $page = 1;
@@ -365,6 +426,8 @@ class PpuAdmin
 	 */
 	public function postAttributes($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$items = json_decode($request->get_body())->items;
 		$this->handleAttributes($items);
 	}
@@ -390,6 +453,8 @@ class PpuAdmin
 	 */
 	public function postTags($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$items = json_decode($request->get_body())->items;
 		$this->handleCategoriesAndTags($items, 'tag', 'tag');
 	}
@@ -415,6 +480,8 @@ class PpuAdmin
 	 */
 	public function postCategories($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$items = json_decode($request->get_body())->items;
 		$this->handleCategoriesAndTags($items, 'cat', 'category');
 	}
@@ -440,6 +507,8 @@ class PpuAdmin
 	 */
 	public function postProducts($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$items = json_decode($request->get_body())->items;
 		$this->handleProducts($items);
 	}
@@ -465,6 +534,8 @@ class PpuAdmin
 	 */
 	public function postVariations($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$items = json_decode($request->get_body())->items;
 		$this->handleProductVariations($items);
 	}
@@ -490,6 +561,8 @@ class PpuAdmin
 	 */
 	public function postTerms($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$items = json_decode($request->get_body())->items;
 		$this->handleAttributeTerms($items);
 	}
@@ -515,6 +588,8 @@ class PpuAdmin
 	 */
 	public function postImage($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$data = json_decode($request->get_body());
 		$finalResponse = array();
 		require_once(ABSPATH . 'wp-admin/includes/image.php');
@@ -618,6 +693,8 @@ class PpuAdmin
 	 */
 	public function postMenu($request)
 	{
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+
 		$data = json_decode($request->get_body());
 		$this->handleMenuUpload($data->menu);
 	}
@@ -657,27 +734,6 @@ class PpuAdmin
 				break;
 		}
 		wp_safe_redirect($_POST['_wp_http_referer']);
-	}
-
-	/**
-	 * Instantiate an API client to handle internal API calls to the WooCommerce REST API.
-	 * This client is used internally by the POST endpoints
-	 * The default timeout is 15sec, which is too short.  Therefore it was increased to 300sec.
-	 * It uses the WooCommerce key & secret that are created and saved in the plugins admin menu
-	 */
-	private function apiClient()
-	{
-		$siteUrl = get_site_url();
-		return new Client(
-			$siteUrl,
-			get_option('ppu-wc-key'),
-			get_option('ppu-wc-secret'),
-			[
-				'wp_api' => true,
-				'version' => 'wc/v3',
-				'timeout' => 300,
-			]
-		);
 	}
 
 	/**
