@@ -76,7 +76,7 @@ class PpuAdmin
 	{
 		register_setting('ppu_custom_settings', 'ppu-wc-key');
 		register_setting('ppu_custom_settings', 'ppu-wc-secret');
-		register_setting('ppu_custom_settings', 'ppu-peleman-authorization-key');
+		register_setting('ppu_custom_settings', 'peleman-authorization-key');
 	}
 
 	/**
@@ -110,7 +110,7 @@ class PpuAdmin
 	 */
 	private function validateHeader($header)
 	{
-		$authKey = get_option('ppu-peleman-authorization-key');
+		$authKey = get_option('peleman-authorization-key');
 
 		if ($header !== $authKey) {
 			$statusCode = 401;

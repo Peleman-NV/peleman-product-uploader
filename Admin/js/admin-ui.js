@@ -11,6 +11,6 @@
             result += chars.charAt(Math.floor(Math.random() * chars.length));
         }
 
-        $('#ppu-peleman-authorization-key').val(result);
+        $('#peleman-authorization-key').val(result);
     }
 })(jQuery);

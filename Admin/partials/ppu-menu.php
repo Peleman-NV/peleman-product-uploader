@@ -41,10 +41,10 @@
         </h3>
         <div class="form-row">
             <div class="grid-medium-column">
-                <label for="ppu-peleman-authorization-key">REST API authentication</label>
+                <label for="peleman-authorization-key">REST API authentication</label>
             </div>
             <div class="grid-large-column-with-button">
-                <input class="inline" type="text" id="ppu-peleman-authorization-key" name="ppu-peleman-authorization-key" value="<?= get_option('ppu-peleman-authorization-key'); ?>" placeholder="Authentication key">
+                <input class="inline" type="text" id="peleman-authorization-key" name="peleman-authorization-key" value="<?= get_option('peleman-authorization-key'); ?>" placeholder="Authorization key">
                 <div class="inline">
                     <button id="generate-peleman-auth-key" type="button" class="ppu-button ppu-button-secondary inline">Generate</button>
                 </div>
