@@ -3,7 +3,6 @@
 namespace PelemanProductUploader\Admin;
 
 use Automattic\WooCommerce\Client;
-use PelemanProductUploader\Services\ScriptTimerService;
 
 class PpuAdmin
 {
@@ -689,7 +688,6 @@ class PpuAdmin
 	 */
 	private function handleProducts($dataArray)
 	{
-		$scriptTimerService = new ScriptTimerService();
 		$endpoint = 'products/';
 		$currentAttributes = $this->getFormattedArrayOfExistingItems('products/attributes/', 'attributes');
 		$finalResponse = array();
@@ -855,7 +853,6 @@ class PpuAdmin
 			}
 			$response = array();
 		}
-		$scriptTimerService->stopAndLogDuration(__FUNCTION__, __DIR__);
 
 		wp_send_json($finalResponse, 200);
 	}
@@ -1177,7 +1174,6 @@ class PpuAdmin
 	 */
 	private function handleProductVariations($dataArray)
 	{
-		$scriptTimerService = new ScriptTimerService();
 		$finalResponse = array();
 
 		// get all current attributes
@@ -1313,7 +1309,6 @@ class PpuAdmin
 			}
 		}
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
-		$scriptTimerService->stopAndLogDuration(__FUNCTION__, __DIR__);
 
 		wp_send_json($finalResponse, $statusCode);
 	}
@@ -1323,7 +1318,6 @@ class PpuAdmin
 	 */
 	private function handleAttributes($dataArray)
 	{
-		$scriptTimerService = new ScriptTimerService();
 		$finalResponse = array();
 
 		$api = $this->apiClient();
@@ -1384,7 +1378,6 @@ class PpuAdmin
 		}
 
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
-		$scriptTimerService->stopAndLogDuration(__FUNCTION__, __DIR__);
 
 		wp_send_json($finalResponse, $statusCode);
 	}
@@ -1425,7 +1418,6 @@ class PpuAdmin
 	 */
 	private function handleAttributeTerms($dataArray)
 	{
-		$scriptTimerService = new ScriptTimerService();
 		$finalResponse = array();
 
 		// get all current attributes
@@ -1527,7 +1519,6 @@ class PpuAdmin
 		}
 
 		$statusCode = !in_array('error', array_column($finalResponse, 'status')) ? 200 : 207;
-		$scriptTimerService->stopAndLogDuration(__FUNCTION__, __DIR__);
 
 		wp_send_json($finalResponse, $statusCode);
 	}
