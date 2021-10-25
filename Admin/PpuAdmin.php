@@ -700,43 +700,6 @@ class PpuAdmin
 	}
 
 	/**
-	 * Allows JSON files to be uploaded in the admin menu instead of via API
-	 */
-	public function uploadJsonViaForm()
-	{
-		check_admin_referer('upload_json');
-
-		$jsonData = file_get_contents($_FILES['ppu-upload']['tmp_name']);
-		$data = json_decode($jsonData);
-
-		$items = $data->items;
-
-		switch ($data->type) {
-			case 'products':
-				$this->handleProducts($items);
-				break;
-			case 'variations':
-				$this->handleProductVariations($items);
-				break;
-			case 'categories':
-				$this->handleCategoriesAndTags($items, 'cat', 'category');
-				break;
-			case 'attributes':
-				$this->handleAttributes($items);
-				break;
-			case 'terms':
-				$this->handleAttributeTerms($items);
-				break;
-			case 'tags':
-				$this->handleCategoriesAndTags($items, 'tag', 'tag');
-				break;
-			case 'images':
-				break;
-		}
-		wp_safe_redirect($_POST['_wp_http_referer']);
-	}
-
-	/**
 	 * Handles a product upload using the WC REST API
 	 *
 	 * @param array $dataArray

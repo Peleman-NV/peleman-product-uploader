@@ -87,11 +87,9 @@ class Plugin
 		// Enqueue scripts and styles
 		$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_styles');
 		$this->loader->add_action('admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts', 5);
-		// Register admin menu, plugin settings & admin forms to upload JSON data
+		// Register admin menu, plugin settings
 		$this->loader->add_action('admin_menu', $plugin_admin, 'ppu_add_admin_menu');
 		$this->loader->add_action('admin_init', $plugin_admin, 'ppu_register_plugin_settings');
-		$this->loader->add_action('admin_post_upload_json', $plugin_admin, 'uploadJsonViaForm');
-		$this->loader->add_action('admin_post_nopriv_upload_json', $plugin_admin, 'uploadJsonViaForm');
 		// Register GET endpoints
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetAttributesEndpoint');
 		$this->loader->add_action('rest_api_init', $plugin_admin, 'registerGetCategoriesEndpoint');
