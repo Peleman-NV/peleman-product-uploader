@@ -1,3 +1,10 @@
+<?php
+$wcKey = get_option('ppu-wc-key');
+$wcSecret = get_option('ppu-wc-secret');
+$pelemanAuth = get_option('peleman-authorization-key')
+
+?>
+
 <div class="ppu-settings">
     <h1>Peleman Product Uploader</h1>
     <hr>
@@ -8,7 +15,7 @@
         <li>Pretty permalinks in <strong>Settings > Permalinks</strong> so that the custom endpoints are supported. Default permalinks will not work.</li>
         <li>When calling this plugin via API, you need to generate Woocommerce read/write API keys here: <strong>WooCommerce > Settings > Advanced > REST API > Add Key</strong>.</li>
     </ul>
-    <p>The base URL for the API endpoints is: <strong><?= get_site_url(); ?>/wp-json/ppu/v1/</strong>.
+    <p>The base URL for the API endpoints is: <strong><?php echo get_site_url(); ?>/wp-json/ppu/v1/</strong>.
     </p>
     <hr>
     <h2>Plugins keys</h2>
@@ -25,7 +32,7 @@
                 <label for="ppu-wc-key">WooCommerce key</label>
             </div>
             <div class="grid-large-column">
-                <input type="text" id="ppu-wc-key" name="ppu-wc-key" value="<?= get_option('ppu-wc-key'); ?>" placeholder="WooCommerce key">
+                <input type="text" id="ppu-wc-key" name="ppu-wc-key" value="<?php _e($wcKey); ?>" placeholder="WooCommerce key">
             </div>
         </div>
         <div class="form-row">
@@ -33,7 +40,7 @@
                 <label for="ppu-wc-secret">WooCommerce secret</label>
             </div>
             <div class="grid-large-column">
-                <input type="text" id="ppu-wc-secret" name="ppu-wc-secret" value="<?= get_option('ppu-wc-secret'); ?>" placeholder="WooCommerce secret">
+                <input type="text" id="ppu-wc-secret" name="ppu-wc-secret" value="<?php _e($wcSecret); ?>" placeholder="WooCommerce secret">
             </div>
         </div>
         <h3>
@@ -44,7 +51,7 @@
                 <label for="peleman-authorization-key">REST API authentication</label>
             </div>
             <div class="grid-large-column-with-button">
-                <input class="inline" type="text" id="peleman-authorization-key" name="peleman-authorization-key" value="<?= get_option('peleman-authorization-key'); ?>" placeholder="Authorization key">
+                <input class="inline" type="text" id="peleman-authorization-key" name="peleman-authorization-key" value="<?php _e($pelemanAuth); ?>" placeholder="Authorization key">
                 <div class="inline">
                     <button id="generate-peleman-auth-key" type="button" class="ppu-button ppu-button-secondary inline">Generate</button>
                 </div>
