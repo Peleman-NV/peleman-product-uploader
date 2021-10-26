@@ -113,11 +113,12 @@ class PpuAdmin
 		$authKey = get_option('peleman-authorization-key');
 
 		if ($header !== $authKey) {
-			$statusCode = 401;
+			$statusCode = 403;
 			$response['status'] = 'error';
 			$response['message'] = 'You are not authorized to use this resource';
 
 			wp_send_json($response, $statusCode);
+			die();
 		}
 	}
 
