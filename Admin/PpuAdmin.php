@@ -971,7 +971,6 @@ class PpuAdmin
 			]
 		);
 
-		//echo $wpdb->last_query;
 		if ($result > 0) {
 			return true;
 		}
