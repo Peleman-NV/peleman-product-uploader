@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace PelemanProductUploader\Includes\MegaMenu;
 
+use PelemanProductUploader\Includes\Response;
+
 class MegaMenuBuilder
 {
     /**
@@ -14,22 +16,20 @@ class MegaMenuBuilder
      */
     public function handleMenuUpload(object $menu): void
     {
-        $response = [];
-        $errorsArray = [];
+        $response = new Response();
         $createdMenus = [];
         $items = $menu->items;
         $isTranslatedMenu = $menu->lang !== '' && $menu->lang !== 'en';
+        $createdMenu = $this->createMenuContainer($menu->name);
 
-        if ($createdMenu = $this->createMenuContainer($menu->name)) { // create menu container
-            $menuId = $createdMenu['menu_id'];
-            $menuName = $createdMenu['name'];
-            if ($menu->lang === '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => 'en'];
-            if ($menu->lang !== '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => $menu->lang];
-        } else {
-            $response['status'] = 'error';
-            $response['message'] = "Error creating menu container";
+        if (!$createdMenu) {
+            $response->setError("Error creating menu container");
             wp_send_json($response, 400);
         }
+        $menuId = $createdMenu['menu_id'];
+        $menuName = $createdMenu['name'];
+        if ($menu->lang === '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => 'en'];
+        if ($menu->lang !== '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => $menu->lang];
 
         // divvy items up into parent- and child arrays depending on parent_item_menu_name being empty or not
         $parentItems = array_filter($items, function ($item) {
@@ -42,7 +42,7 @@ class MegaMenuBuilder
         foreach ($parentItems as $parent) { // create parent menu items
             $result = $this->create_menu_item($menuId, $parent);
             if (!is_int($result)) {
-                $response['status'] = 'error';
+                $response->setError();
                 $errorsArray[] = $result;
             }
         }
@@ -57,18 +57,19 @@ class MegaMenuBuilder
         foreach ($childItems as $child) { // create child menu items
             $parentId = $formattedCurrentMenuItemsArray[$child->parent_menu_item_name];
             if (!is_int($parentId) || empty($parentId)) {
-                $response['status'] = 'error';
-                $errorsArray[] = [
+                $response->setError();
+                $response->addError([
                     'message' => "Could not determine parent for \"{$child->menu_item_name}\"",
                     'item' => $child,
-                ];
+                ]);
                 continue;
             }
 
             $result = $this->create_menu_item($menuId, $child, $parentId);
 
             if (!is_int($result)) {
-                $response['status'] = 'error';
+                $response->setError();
+                $response->addError(($result));
                 $errorsArray[] = $result;
             }
             $finalItemArray[] = ['childId' => $result, 'parentId' => $parentId];
@@ -76,15 +77,13 @@ class MegaMenuBuilder
 
         // per parent create a parentString
         if ($this->createMegaMenu($currentMenuItems, wp_get_nav_menu_items($menuName)) === false) {
-            $response['status'] = 'error';
-            $response['message'] = "Error creating mega menu";
+            $response->setError("Error creating mega menu");
         }
 
         $this->joinCreatedMenus($createdMenus);
-        $response['errors'] = $errorsArray;
 
         // what does this do?????
-        if (isset($response['error']) && !empty($response['error'])) {
+        if (!$response->isSuccess() && $response->hasErrors()) {
             $this->deleteAllCreatedMenus($createdMenus);
             wp_send_json($response, 400);
         }
@@ -101,9 +100,8 @@ class MegaMenuBuilder
         $locations['vertical'] = $menuId;
         set_theme_mod('nav_menu_locations', $locations);
 
-        $response['status'] = 'success';
-        $response['message'] = 'menu(\'s) created successfully';
-        $response['menus'] = $createdMenus;
+        $response->setMessage('menu(\'s) created successfully');
+        $response->addMenus($createdMenus);
 
         wp_send_json($response, 200);
     }
@@ -114,13 +112,14 @@ class MegaMenuBuilder
      * @param object $menu_name
      * @return array
      */
-    private function createMenuContainer(string $name): array
+    private function createMenuContainer(string $name): ?array
     {
         if (empty($name)) return false;
         $menuId = wp_create_nav_menu($name);
 
         if (isset($menuId->errors)) {
-            return false;
+            error_log("Errors: " . print_r($menuId->errors, true));
+            return null;
         }
         return ['menu_id' => $menuId, 'name' => $name];
     }
@@ -233,19 +232,18 @@ class MegaMenuBuilder
         }
 
         try {
-            $response = wp_update_nav_menu_item(
+            $response['item'] = wp_update_nav_menu_item(
                 $menuId,
                 0, // current menu item ID - 0 for new item,
                 $menuObject
             );
             // save upload item information to items metadata to use later
             update_post_meta($response, 'peleman_mega_menu', $item);
+            return $response;
         } catch (\Throwable $th) {
             $response['message'] = $th->getMessage();
             return $response;
         }
-
-        return $response;
     }
 
     private function createMegaMenu(array $parentItemArray, array $completeMenuItemArray): bool
@@ -256,6 +254,10 @@ class MegaMenuBuilder
             if (empty($childArray)) continue;
 
             $parentItemData = get_post_meta($parentId, "peleman_mega_menu", true);
+            error_log("parent item data: " . print_r($parentItemData, true));
+            if (empty($parentItemData)) {
+                continue;
+            }
             $parentSettingsArray = $this->createMegaMenuParentObjectString($childArray, $parentItemData->column_widths);
 
             // this relies on the existance of the CSS class 'mega-disablelink'
@@ -463,6 +465,10 @@ class MegaMenuBuilder
         // loop over each menu item Id and, if it's parent is matched in the parentItemIdArray,
         // push IT'S Id under that parent
         foreach ($completeMenuItemArray as $menuItem) {
+            if (!isset($menuItemsArray[$menuItem->menu_item_parent])) {
+                error_log("item not found: {$menuItem->menu_item_parent}");
+                continue;
+            }
             array_push($menuItemsArray[$menuItem->menu_item_parent], ['item' => $menuItem->ID]);
         }
 
