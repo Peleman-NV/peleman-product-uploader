@@ -10,6 +10,7 @@ class Response implements JsonSerializable
 {
     private bool $success;
     private string $message;
+    /** @var Response[] */
     private array $errors;
     private array $menus;
 
@@ -33,7 +34,7 @@ class Response implements JsonSerializable
         return $this;
     }
 
-    public function addError(array $error): self
+    public function addError(Response $error): self
     {
         $this->errors[] = $error;
         return $this;
@@ -79,7 +80,7 @@ class Response implements JsonSerializable
         );
 
         if ($this->hasErrors()) {
-            $array['errors'] = $this->errors;
+            $array['errors'] = $this->serializeErrors();
         }
 
         if (!empty($this->menus)) {
@@ -87,5 +88,14 @@ class Response implements JsonSerializable
         }
 
         return $array;
+    }
+
+    private function serializeErrors(): array
+    {
+        $errors = [];
+        foreach ($this->errors as $error) {
+            $errors = $error->jsonSerialize();
+        }
+        return $errors;
     }
 }

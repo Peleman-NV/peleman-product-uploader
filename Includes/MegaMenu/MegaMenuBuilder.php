@@ -5,78 +5,106 @@ declare(strict_types=1);
 namespace PelemanProductUploader\Includes\MegaMenu;
 
 use PelemanProductUploader\Includes\Response;
+use wpdb;
 
 class MegaMenuBuilder
 {
+    private NavMenuItemBuilder $navItemBuilder;
     /**
      * Creates a WordPress menu
      * 
      * Creating a menu and a megamenu are 2 seperate things, but since a megamenu needs a menu,
      * the menu is created first.
      */
+    public function __construct()
+    {
+        $this->navItemBuilder = new NavMenuItemBuilder();
+    }
+
     public function handleMenuUpload(object $menu): void
     {
+
+        // error_log(print_r(wp_get_nav_menu_items(557),true));
         $response = new Response();
         $createdMenus = [];
         $items = $menu->items;
         $isTranslatedMenu = $menu->lang !== '' && $menu->lang !== 'en';
+
         $createdMenu = $this->createMenuContainer($menu->name);
 
         if (!$createdMenu) {
             $response->setError("Error creating menu container");
             wp_send_json($response, 400);
         }
-        $menuId = $createdMenu['menu_id'];
-        $menuName = $createdMenu['name'];
-        if ($menu->lang === '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => 'en'];
-        if ($menu->lang !== '') $createdMenus[] = ['id' => $menuId, 'name' => $menuName, 'lang' => $menu->lang];
 
-        // divvy items up into parent- and child arrays depending on parent_item_menu_name being empty or not
-        $parentItems = array_filter($items, function ($item) {
-            return $item->parent_menu_item_name === '';
-        });
-        $childItems = array_filter($items, function ($item) {
-            return $item->parent_menu_item_name !== '';
-        });
+        $createdMenus[] = [
+            'id'    => $createdMenu->get_id(),
+            'name'  => $createdMenu->get_name(),
+            'lang'  => $menu->lang ?: 'en'
+        ];
 
-        foreach ($parentItems as $parent) { // create parent menu items
-            $result = $this->create_menu_item($menuId, $parent);
-            if (!is_int($result)) {
-                $response->setError();
-                $errorsArray[] = $result;
+        $items = $this->AddKeysToItemArray($items);
+        $objects = array();
+
+        //TODO:: unclutter this unholy mess
+        foreach ($items as $slug => $item) {
+            try {
+                if (isset($item->parent_menu_item_name)) {
+                    $objects[$slug]['parent'] = $item->parent_menu_item_name;
+                }
+                $navItem = $this->navItemBuilder->create_menu_item($item);
+                $navItem->set_parent_id($objects[$item->parent_menu_item_name]['id'] ?? 0);
+                $objects[$slug]['id'] = wp_update_nav_menu_item(
+                    $createdMenu->get_id(),
+                    0,
+                    $navItem->to_array()
+                );
+            } catch (\Exception $e) {
+                $response->addError(new Response(false, $e->getMessage()));
             }
         }
 
-        $currentMenuItems = wp_get_nav_menu_items($menuName);
+        //FIXME: this method no longer works the way it did in 5.9.5.
+        //in 6.1.1, this returns an empty array. this method only returns a proper next time it is called.
+        $currentMenuItems = wp_get_nav_menu_items($createdMenu->get_id());
+        //TODO: it is clear that the nav menu items are added properly, but cannot be retrieved within the same execution
+        //as such, the fix would be to try and work without these.
+
+        error_log("current menu items: " . print_r($currentMenuItems, true));
+        // if (empty($currentMenuItems)) {
+        //     $response->setError("No current menu items found.");
+        //     wp_send_json($response, 500);
+        // }
         $formattedCurrentMenuItemsArray = [];
         foreach ($currentMenuItems as $menuItem) {
             $formattedCurrentMenuItemsArray[$menuItem->title] = $menuItem->ID;
         }
 
         $finalItemArray = [];
-        foreach ($childItems as $child) { // create child menu items
+        foreach ($item as $child) { // create child menu items
             $parentId = $formattedCurrentMenuItemsArray[$child->parent_menu_item_name];
             if (!is_int($parentId) || empty($parentId)) {
                 $response->setError();
-                $response->addError([
-                    'message' => "Could not determine parent for \"{$child->menu_item_name}\"",
-                    'item' => $child,
-                ]);
+                $response->addError(new NavMenuResponse(
+                    false,
+                    "Could not determine parent for \"{$child->menu_item_name}\"",
+                    $child
+                ));
                 continue;
             }
 
-            $result = $this->create_menu_item($menuId, $child, $parentId);
+            $result = $this->navItemBuilder->create_menu_item($createdMenu, $child, $parentId);
 
-            if (!is_int($result)) {
-                $response->setError();
-                $response->addError(($result));
-                $errorsArray[] = $result;
-            }
+            // if (!is_int($result)) {
+            //     $response->setError();
+            //     $response->addError(($result));
+            //     $errorsArray[] = $result;
+            // }
             $finalItemArray[] = ['childId' => $result, 'parentId' => $parentId];
         }
 
         // per parent create a parentString
-        if ($this->createMegaMenu($currentMenuItems, wp_get_nav_menu_items($menuName)) === false) {
+        if ($this->createMegaMenu($currentMenuItems, wp_get_nav_menu_items($createdMenu->get_name())) === false) {
             $response->setError("Error creating mega menu");
         }
 
@@ -91,13 +119,12 @@ class MegaMenuBuilder
         if ($isTranslatedMenu) {
             $term = get_term_by('name', $menu->parent_menu_name, 'nav_menu');
             $parentMenuId = $term->term_id;
-            // join current table with parent
-            $this->joinTranslatedMenuWithDefaultMenu($menuId, $menu->lang, $parentMenuId);
+            $this->joinTranslatedMenuWithDefaultMenu($createdMenu->get_id(), $menu->lang, $parentMenuId);
         }
 
         // set menu as active and vertical
         $locations = get_theme_mod('nav_menu_locations');
-        $locations['vertical'] = $menuId;
+        $locations['vertical'] = $createdMenu->get_id();
         set_theme_mod('nav_menu_locations', $locations);
 
         $response->setMessage('menu(\'s) created successfully');
@@ -109,146 +136,69 @@ class MegaMenuBuilder
     /**
      * Creates a menu container (in wp_terms table)
      *
-     * @param object $menu_name
-     * @return array
      */
-    private function createMenuContainer(string $name): ?array
+    private function createMenuContainer(string $name): ?MenuContainer
     {
-        if (empty($name)) return false;
         $menuId = wp_create_nav_menu($name);
+        error_log("new menu id: " . print_r($menuId, true));
 
         if (isset($menuId->errors)) {
             error_log("Errors: " . print_r($menuId->errors, true));
             return null;
         }
-        return ['menu_id' => $menuId, 'name' => $name];
+        return new MenuContainer($name, $menuId);
     }
 
-    private function joinCreatedMenus(array $menuArray): void
+    private function joinCreatedMenus(array $menus): void
     {
         global $wpdb;
-        $defaultLanguageMenuArray = [];
-        // Get current term_relationships for menu ID's
-        $existingRelationships = [];
-        foreach ($menuArray as $menu) {
-            if ($menu['lang'] !== 'en') {
-                // get existing terms for secondary languages
-                $tempResult[$menu['lang']] = $wpdb->get_results("SELECT object_id FROM {$wpdb->prefix}term_relationships WHERE term_taxonomy_id = {$menu['id']};");
-                $mappedResult[$menu['lang']] = array_map(function ($e) {
-                    return $e->object_id;
-                }, $tempResult[$menu['lang']]);
-                $existingRelationships[$menu['lang']] = implode(',', $mappedResult[$menu['lang']]);
+        if ($wpdb instanceof wpdb) {
+            $defaultLanguageMenuArray = [];
+            // Get current term_relationships for menu ID's
+            $existingRelationships = [];
+            foreach ($menus as $menu) {
+                if ($menu['lang'] !== 'en') {
+                    // get existing terms for secondary languages
+                    $tempResult[$menu['lang']] = $wpdb->get_results("SELECT object_id FROM {$wpdb->prefix}term_relationships WHERE term_taxonomy_id = {$menu['id']};");
+                    $mappedResult[$menu['lang']] = array_map(function ($e) {
+                        return $e->object_id;
+                    }, $tempResult[$menu['lang']]);
+                    $existingRelationships[$menu['lang']] = implode(',', $mappedResult[$menu['lang']]);
+                }
+                if ($menu['lang'] === 'en') {
+                    $defaultLanguageMenuArray = $menu;
+                }
             }
-            if ($menu['lang'] === 'en') {
-                $defaultLanguageMenuArray = $menu;
+
+            // update menu items langauges
+            $stringTranslationsTable = $wpdb->prefix . 'icl_translations';
+            foreach ($existingRelationships as $language => $relationshipsString) {
+                $updateMenuItemsSql = "UPDATE $stringTranslationsTable SET language_code = '$language', source_language_code = 'en' WHERE element_id in ($relationshipsString);";
+                $wpdb->get_results($updateMenuItemsSql);
             }
-        }
 
-        // update menu items langauges
-        $stringTranslationsTable = $wpdb->prefix . 'icl_translations';
-        foreach ($existingRelationships as $language => $relationshipsString) {
-            $updateMenuItemsSql = "UPDATE $stringTranslationsTable SET language_code = '$language', source_language_code = 'en' WHERE element_id in ($relationshipsString);";
-            $wpdb->get_results($updateMenuItemsSql);
-        }
+            $tridSql = "SELECT trid FROM $stringTranslationsTable WHERE language_code = 'en' AND element_id = {$defaultLanguageMenuArray['id']};";
+            $trid = $wpdb->get_results($tridSql)[0]->trid;
 
-        $tridSql = "SELECT trid FROM $stringTranslationsTable WHERE language_code = 'en' AND element_id = {$defaultLanguageMenuArray['id']};";
-        $trid = $wpdb->get_results($tridSql)[0]->trid;
-
-        // update menu container languages and sync trid's of menu container
-        foreach ($menuArray as $menu) {
-            if ($menu['lang'] === 'en') continue;
-            $updateMenuContainersSql = "UPDATE $stringTranslationsTable SET language_code = '{$menu['lang']}', trid = $trid, source_language_code = 'en' WHERE element_id = {$menu['id']};";
-            $wpdb->get_results($updateMenuContainersSql);
+            // update menu container languages and sync trid's of menu container
+            foreach ($menus as $menu) {
+                if ($menu['lang'] === 'en') continue;
+                $updateMenuContainersSql = "UPDATE $stringTranslationsTable SET language_code = '{$menu['lang']}', trid = $trid, source_language_code = 'en' WHERE element_id = {$menu['id']};";
+                $wpdb->get_results($updateMenuContainersSql);
+            }
         }
     }
 
-    private function deleteAllCreatedMenus(array $menuArray): void
+    private function deleteAllCreatedMenus(array $menus): void
     {
-        foreach ($menuArray as $menuItem) {
+        foreach ($menus as $menuItem) {
             wp_delete_nav_menu($menuItem['id']);
         }
     }
 
-    /**
-     * Creates a menu item
-     *
-     * @param int $menuId
-     * @param object $item
-     * @param int $parentId
-     * @return array
-     */
-    private function create_menu_item(int $menuId, object $item, int $parentId = 0): array
+    private function createMegaMenu(array $parentItem, array $completeMenuItems): bool
     {
-
-        if ((!is_int($item->position) || empty($item->position)) && $item->position !== 0) {
-            $response['status'] = 'error';
-            $response = [
-                'message' => "Could not determine position for \"{$item->menu_item_name}\"",
-                'item' => $item
-            ];
-            return $response;
-        }
-
-        $menuObject = [
-            'menu-item-position' => $item->position,
-            'menu-item-status' => 'publish',
-            'menu-item-parent-id' => $parentId,
-            'menu-item-title' => $item->menu_item_name, // display name
-            'menu-item-attr-title' => $item->menu_item_name, // css title attribute
-        ];
-
-        if (!empty($item->category_slug) && empty($item->custom_url) && empty($item->product_sku)) {
-            // category menu item
-            $term = get_term_by('slug', $item->category_slug, 'product_cat');
-            if ($term === false) {
-                $response['message'] = "Error finding category";
-                $response['item'] = $item;
-                return $response;
-            }
-
-            $menuObject['menu-item-type'] = 'taxonomy';
-            $menuObject['menu-item-object'] = $term->taxonomy;
-            $menuObject['menu-item-object-id'] = $term->term_id;
-        } else if (empty($item->category_slug) && empty($item->custom_url) && !empty($item->product_sku)) {
-            // product menu item
-            $productId = wc_get_product_id_by_sku($item->product_sku);
-            if ($productId === 0) {
-                $response['message'] = "Error finding product";
-                $response['item'] = $item;
-                return $response;
-            }
-
-            $menuObject['menu-item-type'] = 'post_type';
-            $menuObject['menu-item-object'] = 'product';
-            $menuObject['menu-item-object-id'] = $productId;
-        } else if (empty($item->category_slug) && !empty($item->custom_url) && empty($item->product_sku) || $item->heading_text === true) {
-            // custom menu item
-            $menuObject['menu-item-type'] = 'custom';
-            $menuObject['menu-item-url'] = $item->custom_url;
-        } else {
-            $response['message'] = "Error defining menu item type";
-            $response['item'] = $item;
-            return $response;
-        }
-
-        try {
-            $response['item'] = wp_update_nav_menu_item(
-                $menuId,
-                0, // current menu item ID - 0 for new item,
-                $menuObject
-            );
-            // save upload item information to items metadata to use later
-            update_post_meta($response, 'peleman_mega_menu', $item);
-            return $response;
-        } catch (\Throwable $th) {
-            $response['message'] = $th->getMessage();
-            return $response;
-        }
-    }
-
-    private function createMegaMenu(array $parentItemArray, array $completeMenuItemArray): bool
-    {
-        $menuItemsArray = $this->createArrayOfParentAndChildMenuItems($parentItemArray, $completeMenuItemArray);
+        $menuItemsArray = $this->createArrayOfParentAndChildMenuItems($parentItem, $completeMenuItems);
 
         foreach ($menuItemsArray as $parentId => $childArray) {
             if (empty($childArray)) continue;
@@ -258,10 +208,10 @@ class MegaMenuBuilder
             if (empty($parentItemData)) {
                 continue;
             }
-            $parentSettingsArray = $this->createMegaMenuParentObjectString($childArray, $parentItemData->column_widths);
+            $crerentSettings = $this->createMegaMenuParentObjectString($childArray, $parentItemData->column_widths);
 
             // this relies on the existance of the CSS class 'mega-disablelink'
-            if ($this->addMenuObjectStringToPostMetaData($parentId, $parentSettingsArray, ['disablelink']) === false) {
+            if ($this->addMenuObjectStringToPostMetaData($parentId, $crerentSettings, ['disablelink']) === false) {
                 return false;
             }
             foreach ($childArray as $child) {
@@ -277,7 +227,7 @@ class MegaMenuBuilder
     }
 
     /**
-     * Creates a postmetadata string for a mega menu child item
+     * Creates a post metadata string for a mega menu child item
      *
      * @param int $childId	Child item ID
      * @return array
@@ -373,13 +323,13 @@ class MegaMenuBuilder
     /**
      * Creates a postmetadata string for a mega menu parent item
      *
-     * @param array $navMenuParentItemArray	Array of post item IDs aka nav menu item IDs
+     * @param array $navMenuparentItem	Array of post item IDs aka nav menu item IDs
      */
-    private function createMegaMenuParentObjectString(array $navMenuChildItemArray, object $columnWidths /*, $imageSwapWidgetName*/): array
+    private function createMegaMenuParentObjectString(array $navMenuChildItems, object $columnWidths /*, $imageSwapWidgetName*/): array
     {
         // add JSON item data to elements
         $navMenuItemColumns = [];
-        foreach ($navMenuChildItemArray as $navMenuItem) {
+        foreach ($navMenuChildItems as $navMenuItem) {
             $navMenuItemColumns[$navMenuItem['item']] = get_post_meta($navMenuItem['item'], "peleman_mega_menu", true);
         }
 
@@ -412,7 +362,7 @@ class MegaMenuBuilder
             ]
         ];
 
-        $settingsArray = [
+        $settings = [
             "type" => "grid",
             "item_align" => "left",
             "icon_position" => "left",
@@ -439,22 +389,22 @@ class MegaMenuBuilder
             ]
         ];
 
-        return $settingsArray;
+        return $settings;
     }
 
     /**
      * A helper function that returns an array of parent item ID's keys with as value, an array of their child ID's & image ID's if present
      *
-     * @param array $parentItemArray
-     * @param array $completeMenuItemArray
+     * @param array $parentItem
+     * @param array $completeMenuItems
      * @return array
      */
-    private function createArrayOfParentAndChildMenuItems(array $parentItemArray, array $completeMenuItemArray): array
+    private function createArrayOfParentAndChildMenuItems(array $parentItem, array $completeMenuItems): array
     {
         // reduce array of parent items to array of parent item ID's
         $parentIdArray = array_map(function ($el) {
             return $el->ID;
-        }, $parentItemArray);
+        }, $parentItem);
 
         // take previous array and create array with parent ID's as key with empty arrays as values
         $menuItemsArray = [];
@@ -464,7 +414,7 @@ class MegaMenuBuilder
 
         // loop over each menu item Id and, if it's parent is matched in the parentItemIdArray,
         // push IT'S Id under that parent
-        foreach ($completeMenuItemArray as $menuItem) {
+        foreach ($completeMenuItems as $menuItem) {
             if (!isset($menuItemsArray[$menuItem->menu_item_parent])) {
                 error_log("item not found: {$menuItem->menu_item_parent}");
                 continue;
@@ -475,9 +425,9 @@ class MegaMenuBuilder
         return $menuItemsArray;
     }
 
-    private function updateMegaMenuImageSwapWidgets(array $columnArray): string
+    private function updateMegaMenuImageSwapWidgets(array $columns): string
     {
-        $firstChildImageId = $this->getFirstChildImageId($columnArray);
+        $firstChildImageId = $this->getFirstChildImageId($columns);
 
         $megaMenuImageSwapWidgets = get_option('widget_maxmegamenu_image_swap', true);
         array_push($megaMenuImageSwapWidgets, [
@@ -495,9 +445,9 @@ class MegaMenuBuilder
      *
      * @param array $childArray
      */
-    private function getFirstChildImageId(array $columnArray): ?string
+    private function getFirstChildImageId(array $columns): ?string
     {
-        foreach ($columnArray as $arrayElement) {
+        foreach ($columns as $arrayElement) {
             if (is_null($arrayElement->product_sku) || empty($arrayElement->product_sku)) {
                 continue;
             } else {
@@ -508,10 +458,10 @@ class MegaMenuBuilder
         }
     }
 
-    private function createMegaMenuParentObjectColumnString(string $columnWidth, array $columnObjectArray): array
+    private function createMegaMenuParentObjectColumnString(string $columnWidth, array $columnObjects): array
     {
         $columnObjectItemsArray = [];
-        foreach ($columnObjectArray as $key => $columnObjectItem) {
+        foreach ($columnObjects as $key => $columnObjectItem) {
             $columnObjectItemsArray[] = $this->createMegaMenuParentObjectColumnObjectItemArray($key);
         }
         $columnObjectItems = [
@@ -535,7 +485,7 @@ class MegaMenuBuilder
         ];
     }
 
-    private function joinTranslatedMenuWithDefaultMenu(string $createdMenuId, string $menuLanguage, int $parentMenuId): void
+    private function joinTranslatedMenuWithDefaultMenu(int $createdMenuId, string $menuLanguage, int $parentMenuId): void
     {
         global $wpdb;
         $sql = "SELECT trid FROM {$wpdb->prefix}icl_translations where element_id = " . $parentMenuId . " and element_type = \"tax_nav_menu\";";
@@ -549,11 +499,11 @@ class MegaMenuBuilder
      * Updates a nav menu item's metadata
      *
      * @param int $id
-     * @param array $settingsArray
+     * @param array $settings
      * @param array $cssClasses
      * @return void
      */
-    private function addMenuObjectStringToPostMetaData(int $id, array $settingsArray, array $cssClasses = ['']): void
+    private function addMenuObjectStringToPostMetaData(int $id, array $settings, array $cssClasses = ['']): void
     {
         update_post_meta($id, '_menu_item_megamenu_col', 'columns-2');
         update_post_meta($id, '_menu_item_classes', $cssClasses);
@@ -567,7 +517,7 @@ class MegaMenuBuilder
         update_post_meta($id, '_menu_item_megamenu_icon_color', '');
         update_post_meta($id, '_menu_item_megamenu_sublabel', '');
         update_post_meta($id, '_menu_item_megamenu_sublabel_color', '');
-        update_post_meta($id, '_megamenu', $settingsArray);
+        update_post_meta($id, '_megamenu', $settings);
     }
 
     private function divideIntoArrayOnColumnNumber(array $array, int $columnNumber): array
@@ -586,5 +536,14 @@ class MegaMenuBuilder
             }
         }
         return $finalArray;
+    }
+
+    private function AddKeysToItemArray(array $items): array
+    {
+        $slugItems = [];
+        foreach ($items as $item) {
+            $slugItems[$item->menu_item_name] = $item;
+        }
+        return $slugItems;
     }
 }
