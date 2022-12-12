@@ -1,1 +1,11 @@
-*Log.txt
+# ignore log files and databases
+/vendor
+*.log
+*.sql
+*.sqlite
+
+#ignore autodoc generator files
+build/
+docs/
+phpdoc.dist.xml
+*.phar
