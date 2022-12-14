@@ -3,7 +3,9 @@
 namespace PelemanProductUploader\Admin;
 
 use Automattic\WooCommerce\Client;
+use PelemanProductUploader\Includes\MegaMenu2\MegaMenuBuilder as MegaMenu2MegaMenuBuilder;
 use PelemanProductUploader\Includes\MegaMenu\MegaMenuBuilder;
+use PelemanProductUploader\Includes\MegaMenu\MegaMenuCreationEndpoint;
 
 class PpuAdmin
 {
@@ -695,11 +697,12 @@ class PpuAdmin
 	 */
 	public function postMenu($request)
 	{
-		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH']);
+		$this->validateHeader($_SERVER['HTTP_PELEMAN_AUTH'], true);
 
-		$data = json_decode($request->get_body());
-		$builder = new MegaMenuBuilder();
-		return $builder->handleMenuUpload($data->menu);
+		$data = json_decode($request->get_body(), true);
+		$endpoint = new MegaMenuCreationEndpoint();
+		$response = $endpoint->create_new_megamenu($data['menu']);
+		wp_send_json($response->to_array(), $response->getCode());
 	}
 
 	/**

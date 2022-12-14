@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace PelemanProductUploader\Includes\MegaMenu;
 
-use PelemanProductUploader\Includes\Response;
+use PelemanProductUploader\Includes\MegaMenu\Response;
 
 class NavMenuResponse extends Response
 {
@@ -20,9 +20,9 @@ class NavMenuResponse extends Response
         return $this->item;
     }
 
-    public function jsonSerialize()
+    public function to_array()
     {
-        $array = parent::jsonSerialize();
+        $array = parent::to_array();
         $array['item'] = $this->item;
         return $array;
     }
