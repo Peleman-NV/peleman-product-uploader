@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace PelemanProductUploader\Includes\MegaMenu;
 
 use PelemanProductUploader\Includes\MegaMenu\MenuContainer;
-use PelemanProductUploader\Includes\MegaMenu\MenuItem;
-use PelemanProductUploader\Includes\MegaMenu\MenuItemBuilder;
+use PelemanProductUploader\Includes\MegaMenu\Components\MenuItem;
+use PelemanProductUploader\Includes\MegaMenu\Components\RootMenuItem;
+use PelemanProductUploader\Includes\MegaMenu\MenuItemFactory;
 use PelemanProductUploader\Includes\MegaMenu\Response;
 
 class MegaMenuCreationEndpoint
@@ -31,7 +32,11 @@ class MegaMenuCreationEndpoint
             #endregion
 
             $objectTrees = $this->convert_items_to_object_trees($items);
-            // $this->create_new_menu($menuName, $request['lang'])->add_nav_menu_items($objectTrees);
+            $menu = $this->create_new_menu($menuName, $request['lang']);
+            $menu->add_nav_menu_items($objectTrees);
+
+            $this->convert_menu_to_mega_menu($objectTrees);
+            $this->save_menu_to_location($menu, 'vertical');
 
             return new Response(true, "ding");
         } catch (\Exception $e) {
@@ -57,7 +62,7 @@ class MegaMenuCreationEndpoint
      * converts a list/array of API input items into parented MenuItem object trees
      *
      * @param array $items
-     * @return array
+     * @return RootMenuItem[]
      */
     private function convert_items_to_object_trees(array $items): array
     {
@@ -70,14 +75,14 @@ class MegaMenuCreationEndpoint
      * second loop: insert children into parents objects
      *
      * @param MenuItem[] $items
-     * @return MenuItem[] a list of parent objects, containing children. this is thus an array of trees
+     * @return RootMenuItem[] a list of parent objects, containing children. this is thus an array of trees
      */
     private function parent_objects_in_array(array $objects): array
     {
         $parents = [];
         foreach ($objects as $key => $object) {
             $parent = $object->get_parent_title();
-            if (empty($parent)) {
+            if ($object instanceof RootMenuItem && empty($parent)) {
                 $parents[$key] = $object;
                 continue;
             }
@@ -97,7 +102,7 @@ class MegaMenuCreationEndpoint
     private function create_objects_from_items(array $items): array
     {
         $objects = [];
-        $builder = new MenuItemBuilder();
+        $builder = new MenuItemFactory();
 
         foreach ($items as $item) {
             $input = new InputItem($item);
@@ -110,5 +115,34 @@ class MegaMenuCreationEndpoint
             $objects[$key] = $object;
         }
         return $objects;
+    }
+
+    /**
+     * Undocumented function
+     *
+     * @param RootMenuItem[] $objectTrees
+     * @return boolean
+     */
+    private function convert_menu_to_mega_menu(array $objectTrees)
+    {
+        foreach ($objectTrees as $tree) {
+            if (!$tree->is_parent()) {
+                continue;
+            }
+
+            if (!($tree instanceof RootMenuItem)) {
+                error_log(print_r($tree, true));
+            }
+            $tree->register_settings();
+        }
+        return;
+    }
+
+    private function save_menu_to_location(MenuContainer $menu, string $location = 'primary'): void
+    {
+        $locations = get_theme_mod('nav_menu_locations');
+        error_log("theme locations: " . print_r($locations, true));
+        $locations[$location] = $menu->get_id();
+        set_theme_mod('nav_menu_locations', $locations);
     }
 }

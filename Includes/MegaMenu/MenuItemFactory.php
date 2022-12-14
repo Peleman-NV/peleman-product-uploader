@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace PelemanProductUploader\Includes\MegaMenu;
 
-use PelemanProductUploader\Includes\MegaMenu\MenuItem;
+use PelemanProductUploader\Includes\MegaMenu\Components\ChildMenuItem;
+use PelemanProductUploader\Includes\MegaMenu\Components\MenuItem;
+use PelemanProductUploader\Includes\MegaMenu\Components\RootMenuItem;
 
-class MenuItemBuilder
+class MenuItemFactory
 {
     public function __construct()
     {
@@ -30,25 +32,23 @@ class MenuItemBuilder
         // throw new \Exception("error defining menu item type");
     }
 
-    private function createDefaultItem(InputItem $item): MenuItem
+    private function createBaseItem(InputItem $input): MenuItem
     {
-        return new MenuItem(
-            $item->get_menu_item_name(),
-            $item->get_menu_item_name(),
-            $item->get_position(),
-            $item->get_parent_menu_name()
-        );
+        if (!empty($input->get_parent_menu_name())) {
+            return ChildMenuItem::create_new($input);
+        }
+        return RootMenuItem::create_new($input);
     }
 
     private function CreateCategoryItem(InputItem $item): ?MenuItem
     {
-        // category menu item
         $term = get_term_by('slug', $item->get_category_slug(), 'product_cat');
         if ($term === false) {
             // throw new \Exception("Error finding category");
             return null;
         }
-        $navItem = $this->createDefaultItem($item);
+
+        $navItem = $this->createBaseItem($item);
         $navItem
             ->set_type('taxonomy')
             ->set_object($term->taxonomy)
@@ -63,7 +63,8 @@ class MenuItemBuilder
             // throw new \Exception("error finding product");menu
             return null;
         }
-        $navItem = $this->createDefaultItem($item);
+
+        $navItem = $this->createBaseItem($item);
         $navItem
             ->set_type('post_type')
             ->set_object('product')
@@ -73,7 +74,7 @@ class MenuItemBuilder
 
     private function createCustomMenuItem(InputItem $item): ?MenuItem
     {
-        $navItem = $this->createDefaultItem($item);
+        $navItem = $this->createBaseItem($item);
         $navItem
             ->set_type('custom')
             ->set_item_url($item->get_custom_url());

@@ -2,14 +2,17 @@
 
 declare(strict_types=1);
 
-namespace PelemanProductUploader\Includes\MegaMenu;
+namespace PelemanProductUploader\Includes\MegaMenu\Components;
 
-class MenuItem
+use PelemanProductUploader\Includes\MegaMenu\InputItem;
+use PelemanProductUploader\Includes\MegaMenu\MenuContainer;
+
+abstract class MenuItem
 {
     #region properties
     private string $parent_title;
 
-    private int $db_id;
+    protected int $db_id;
     private int $object_id;
     private string $object;
     private int $parent_id;
@@ -25,13 +28,19 @@ class MenuItem
     private string $xfn;
     private string $status;
 
+    protected ?InputItem $input;
+
     /** @var MenuItem[] */
-    private array $children;
+    protected array $children;
     #endregion
 
-    public function __construct(string $title, 
-    string $attr_title, int $position, string $parent = '', string $status = 'publish')
-    {
+    public function __construct(
+        string $title,
+        string $attr_title,
+        int $position,
+        string $parent = '',
+        string $status = 'publish'
+    ) {
         $this->title = $title;
         $this->status = $status;
         $this->attr_title = $attr_title;
@@ -50,8 +59,11 @@ class MenuItem
         $this->classes = '';
         $this->xfn = '';
 
+        $this->input = null;
         $this->children = [];
     }
+
+    public abstract static function create_new(InputItem $input): self;
 
     #region build setters
     public function set_position(int $position): self
@@ -117,6 +129,16 @@ class MenuItem
         return $this->parent_title;
     }
 
+    public function get_column_number(): int
+    {
+        return (int)$this->column_number ?? 0;
+    }
+
+    public function add_input(InputItem $item): void
+    {
+        $this->input = $item;
+    }
+
     #endregion
     private function to_array(): array
     {
@@ -138,7 +160,12 @@ class MenuItem
         );
     }
 
-    public function add_to_menu(MenuContainer $menu): int
+    public function is_parent(): bool
+    {
+        return !empty($this->children);
+    }
+
+    public function add_to_menu(MenuContainer $menu): void
     {
         $db_id = wp_update_nav_menu_item(
             $menu->get_id(),
@@ -156,11 +183,41 @@ class MenuItem
             $child->set_parent_id($db_id);
             $child->add_to_menu($menu);
         }
-        return $db_id;
     }
 
-    public function is_parent(): bool
+
+    final public function register_settings(): void
     {
-        return !empty($this->children);
+        $settings = $this->generate_settings();
+        $this->add_settings_to_post_meta($settings);
+
+        foreach ($this->children as $child) {
+            $child->register_settings();
+        }
     }
+
+    protected function add_settings_to_post_meta(array $settings): void
+    {
+        try {
+            // $this->update_post_meta('_menu_item_classes', $cssClasses);
+            $this->update_post_meta('_menu_item_megamenu_col', 'columns-2');
+            $this->update_post_meta('_menu_item_megamenu_col_tab', 'columns-1');
+            $this->update_post_meta('_menu_item_megamenu_icon_alignment', 'left');
+            $this->update_post_meta('_menu_item_megamenu_icon_size', 13);
+            $this->update_post_meta('_menu_item_megamenu_style', 'menu_style_column');
+            $this->update_post_meta('_menu_item_megamenu_widgetarea', 0);
+            $this->update_post_meta('_megamenu', $settings);
+        } catch (\Exception $e) {
+            error_log((string)$e);
+            throw $e;
+        }
+    }
+
+    final protected function update_post_meta(string $key, $value): bool
+    {
+        if (empty($this->db_id)) return false;
+        return !empty(update_post_meta($this->db_id, $key, $value));
+    }
+
+    protected abstract function generate_settings(): array;
 }
