@@ -14,6 +14,7 @@ final class RootMenuItem extends MenuItem
     {
         $instance = new RootMenuItem($input->get_menu_item_name(), $input->get_menu_item_name(), $input->get_position(), $input->get_parent_menu_name());
         $instance->add_input($input);
+        $instance->css = ['disablelink'];
         return $instance;
     }
 
@@ -22,22 +23,38 @@ final class RootMenuItem extends MenuItem
         if (empty($this->input)) {
             return [];
         }
-        $MenuItemColumns = [];
+        #region columns
         $columnWidths = $this->input->get_column_widths();
 
         // divvy up into columns
         $MenuItemGroups = [
-            'columnOne' => $this->divideIntoArrayOnColumnNumber($MenuItemColumns, 1),
-            'columnTwo' => $this->divideIntoArrayOnColumnNumber($MenuItemColumns, 2),
-            'columnThree' => $this->divideIntoArrayOnColumnNumber($MenuItemColumns, 3),
+            1 => $this->sort_items_into_columns($this->children, 1),
+            2 => $this->sort_items_into_columns($this->children, 2),
+            3 => $this->sort_items_into_columns($this->children, 3),
         ];
+        // error_log("menu item group result: " . print_r($MenuItemGroups, true));
 
         $navColumnItemArray = [];
-        $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray($columnWidths['one'], $MenuItemGroups['columnOne']);
-        if (!empty($MenuItemGroups['columnTwo'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray($columnWidths['two'], $MenuItemGroups['columnTwo']);
-        if (!empty($MenuItemGroups['columnThree'])) $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray($columnWidths['three'], $MenuItemGroups['columnThree']);
+        $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray(
+            (int)$columnWidths['one'],
+            $MenuItemGroups[1]
+        );
+        if (!empty($MenuItemGroups[2])) {
+            $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray(
+                (int)$columnWidths['two'],
+                $MenuItemGroups[2]
+            );
+        }
+        if (!empty($MenuItemGroups[3])) {
+            $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray(
+                (int)$columnWidths['three'],
+                $MenuItemGroups[3]
+            );
+        }
+        error_log("nav column items: " . print_r($navColumnItemArray, true));
+        #endregion
 
-        $imageSwapWidgetName = $this->updateMegaMenuImageSwapWidgets($MenuItemGroups['columnOne']);
+        $imageSwapWidgetName = $this->updateMegaMenuImageSwapWidgets($MenuItemGroups[1]);
 
         $navColumnItemArray[] = [
             "meta" => [
@@ -90,19 +107,26 @@ final class RootMenuItem extends MenuItem
      * @param MenuItem[] $array
      * @param integer $columnNumber
      * @param integer $maxColumns
-     * @return array
+     * @return MenuItem[]
      */
-    private function divideIntoArrayOnColumnNumber(array $array, int $columnNumber, int $maxColumns = 3): array
+    private function sort_items_into_columns(array $array, int $columnNumber, int $maxColumns = 3): array
     {
-        $finalArray = [];
-        foreach ($array as $key => $element) {
+        $columns = [];
+        foreach ($array as $element) {
             if ($element->get_column_number() === $columnNumber) {
-                $finalArray[$key] = $element;
+                $columns[$element->input->get_position()] = $element;
             }
         }
-        return $finalArray;
+        return $columns;
     }
 
+    /**
+     * Undocumented function
+     *
+     * @param integer $columnWidth
+     * @param MenuItem[] $columnObjectArray
+     * @return array
+     */
     private function createMegaMenuParentObjectColumnArray(int $columnWidth, array $columnObjectArray): array
     {
         $columnObjectItemsArray = [];
@@ -112,33 +136,32 @@ final class RootMenuItem extends MenuItem
                 "class" => "",
                 "hide-on-desktop" => "false",
                 "hide-on-mobile" => "false",
-            ],
-            "items" => $columnObjectItemsArray
+            ]
         ];
-        foreach ($columnObjectArray as $key => $item) {
-            $columnObjectItemsArray[] = $this->createMegaMenuParentObjectColumnObjectItemArray((string)$key);
-        }
 
-        $columnObjetItems['items'] = $columnObjectItemsArray;
+        foreach ($columnObjectArray as $item) {
+            $columnObjectItemsArray[] = [
+                'id' => $item->get_db_id(),
+                'type' => 'item'
+            ];
+        }
+        $columnObjectItems['items'] = $columnObjectItemsArray;
         return $columnObjectItems;
     }
 
-    private function createMegaMenuParentObjectColumnObjectItemArray(string $menuObjectId)
-    {
-        return [
-            "id" => $menuObjectId,
-            "type" => "item"
-        ];
-    }
-
+    /**
+     * Undocumented function
+     *
+     * @param MenuItem[] $columnArray
+     * @return string
+     */
     private function updateMegaMenuImageSwapWidgets(array $columnArray): string
     {
-        return '';
         $firstChildImageId = $this->getFirstChildImageId($columnArray);
 
-        $megaMenuImageSwapWidgets = get_option('widget_maxmegamenu_image_swap', true);
-        error_log(print_r($megaMenuImageSwapWidgets, true));
+        $megaMenuImageSwapWidgets = (array)get_option('widget_maxmegamenu_image_swap', true);
         $megaMenuImageSwapWidgets = $megaMenuImageSwapWidgets ?? [];
+        error_log(print_r($megaMenuImageSwapWidgets, true));
         $megaMenuImageSwapWidgets[] = [
             'media_file_id' => $firstChildImageId,
             'media_file_size' => 'full',
@@ -149,16 +172,22 @@ final class RootMenuItem extends MenuItem
         return 'maxmegamenu_image_swap-' . array_key_last($megaMenuImageSwapWidgets);
     }
 
+    /**
+     * Undocumented function
+     *
+     * @param MenuItem[] $columnArray
+     * @return string
+     */
     private function getFirstChildImageId(array $columnArray): string
     {
         foreach ($columnArray as $arrayElement) {
-            if (is_null($arrayElement->product_sku) || empty($arrayElement->product_sku)) {
-                continue;
-            } else {
-                $product = wc_get_product(wc_get_product_id_by_sku($arrayElement->product_sku));
+            $sku = $arrayElement->get_product_sku();
+            if (!$sku) continue;
 
-                return $product->get_image_id();
-            }
+            $product = wc_get_product(wc_get_product_id_by_sku($sku));
+            if (!$product) continue;
+
+            return $product->get_image_id();
         }
         return '';
     }

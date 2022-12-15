@@ -25,6 +25,9 @@ class MenuItemFactory
         if ($item->is_custom_item()) {
             return $this->createCustomMenuItem($item);
         }
+        if ($item->is_heading_text()) {
+            return $this->createHeaderMenuItem($item);
+        }
 
         error_log("Could not create nav menu item: {$item->menu_item_name}");
         return null;
@@ -37,7 +40,7 @@ class MenuItemFactory
         if (!empty($input->get_parent_menu_name())) {
             return ChildMenuItem::create_new($input);
         }
-        return RootMenuItem::create_new($input);
+        return RootMenuItem::create_new($input)->add_css_classes('disablelink');
     }
 
     private function CreateCategoryItem(InputItem $item): ?MenuItem
@@ -78,6 +81,13 @@ class MenuItemFactory
         $navItem
             ->set_type('custom')
             ->set_item_url($item->get_custom_url());
+        return $navItem;
+    }
+
+    private function createHeaderMenuItem(InputItem $item): ?MenuItem
+    {
+        $navItem = $this->createBaseItem($item);
+        $navItem->set_type('custom');
         return $navItem;
     }
 }

@@ -29,6 +29,7 @@ abstract class MenuItem
     private string $status;
 
     protected ?InputItem $input;
+    protected array $css;
 
     /** @var MenuItem[] */
     protected array $children;
@@ -61,6 +62,7 @@ abstract class MenuItem
 
         $this->input = null;
         $this->children = [];
+        $this->css = [];
     }
 
     public abstract static function create_new(InputItem $input): self;
@@ -131,12 +133,33 @@ abstract class MenuItem
 
     public function get_column_number(): int
     {
-        return (int)$this->column_number ?? 0;
+        return $this->input->get_column_number() ?? 0;
     }
 
     public function add_input(InputItem $item): void
     {
         $this->input = $item;
+    }
+
+    public function add_css_classes(string ...$args): self
+    {
+        $this->css = array_merge($this->css, $args);
+        return $this;
+    }
+
+    public function get_position(): int
+    {
+        return $this->position;
+    }
+
+    public function get_db_id(): int
+    {
+        return $this->db_id;
+    }
+
+    public function get_product_sku(): string
+    {
+        return $this->input->get_product_sku();
     }
 
     #endregion
@@ -188,29 +211,29 @@ abstract class MenuItem
 
     final public function register_settings(): void
     {
-        $settings = $this->generate_settings();
-        $this->add_settings_to_post_meta($settings);
+        $this->add_settings_to_post_meta();
 
         foreach ($this->children as $child) {
             $child->register_settings();
         }
     }
 
-    protected function add_settings_to_post_meta(array $settings): void
+    public function add_settings_to_post_meta(): void
     {
-        try {
-            // $this->update_post_meta('_menu_item_classes', $cssClasses);
-            $this->update_post_meta('_menu_item_megamenu_col', 'columns-2');
-            $this->update_post_meta('_menu_item_megamenu_col_tab', 'columns-1');
-            $this->update_post_meta('_menu_item_megamenu_icon_alignment', 'left');
-            $this->update_post_meta('_menu_item_megamenu_icon_size', 13);
-            $this->update_post_meta('_menu_item_megamenu_style', 'menu_style_column');
-            $this->update_post_meta('_menu_item_megamenu_widgetarea', 0);
-            $this->update_post_meta('_megamenu', $settings);
-        } catch (\Exception $e) {
-            error_log((string)$e);
-            throw $e;
-        }
+        $this->update_post_meta('_megamenu', $this->generate_settings());
+        $this->update_post_meta('_menu_item_classes', $this->css);
+
+        $this->update_post_meta('_menu_item_megamenu_col', 'columns-2');
+        $this->update_post_meta('_menu_item_megamenu_col_tab', 'columns-1');
+        $this->update_post_meta('_menu_item_megamenu_icon_alignment', 'left');
+        $this->update_post_meta('_menu_item_megamenu_icon_size', 13);
+        $this->update_post_meta('_menu_item_megamenu_style', 'menu_style_column');
+        $this->update_post_meta('_menu_item_megamenu_widgetarea', 0);
+        $this->update_post_meta('_menu_item_megamenu_background_image', '');
+        $this->update_post_meta('_menu_item_megamenu_icon', '');
+        $this->update_post_meta('_menu_item_megamenu_icon_color', '');
+        $this->update_post_meta('_menu_item_megamenu_sublabel', '');
+        $this->update_post_meta('_menu_item_megamenu_sublabel_color', '');
     }
 
     final protected function update_post_meta(string $key, $value): bool

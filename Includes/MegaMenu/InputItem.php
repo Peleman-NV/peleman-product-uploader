@@ -49,9 +49,9 @@ class InputItem
         return (int)$this->data->column_number ?? 0;
     }
 
-    public function get_is_heading_text(): bool
+    public function is_heading_text(): bool
     {
-        return (bool)$this->data->heading_text ?? false;
+        return $this->data->heading_text ?? false;
     }
 
     public function get_column_widths(): ?array
@@ -78,6 +78,6 @@ class InputItem
 
     public function is_custom_item(): bool
     {
-        return $this->get_custom_url() || $this->get_is_heading_text();
+        return !empty($this->get_custom_url());
     }
 }

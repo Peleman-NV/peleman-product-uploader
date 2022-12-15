@@ -24,7 +24,7 @@ final class ChildMenuItem extends MenuItem
         }
         $itemType = get_post_meta($childId, '_menu_item_object');
         $input = $this->input;
-        $isHeading = $input->get_is_heading_text();
+        $isHeading = $input->is_heading_text();
         $childImageId = 0;
 
         if (isset($itemType[0]) && $itemType[0] === 'product') {
@@ -32,19 +32,13 @@ final class ChildMenuItem extends MenuItem
             $childImageId = get_post_thumbnail_id($productId);
         }
 
-        $settings["type"] = "grid";
-
+        $settings = array(
+            "type" => "grid"
+        );
 
         if ($isHeading) {
-            if (
-                !empty($input->get_category_slug())
-                || !empty($input->get_custom_url())
-                || !empty($input->get_product_sku())
-            ) {
-                $settings['disable_link'] = 'false';
-            } else {
-                $settings['disable_link'] = 'true';
-            }
+
+            $settings['disable_link'] = $input->is_custom_item() ? 'false' : 'true';
             $settings['styles'] = [
                 'enabled' => [
                     'menu_item_link_color' => '#333',
@@ -95,12 +89,12 @@ final class ChildMenuItem extends MenuItem
                 ]
             ];
             if ($input->get_position() !== 1) {
-                $childSettingsArray['styles']['enabled']['menu_item_padding_top'] = '10px';
+                $settings['styles']['enabled']['menu_item_padding_top'] = '10px';
             }
         }
         if ($childImageId !== 0) {
             $settings['image_swap'] = [
-                "id" => strval($childImageId),
+                "id" => (string)$childImageId,
                 "size" => "full"
             ];
         }
