@@ -9,6 +9,7 @@ use PelemanProductUploader\Includes\MegaMenu\Components\MenuItem;
 use PelemanProductUploader\Includes\MegaMenu\Components\RootMenuItem;
 use PelemanProductUploader\Includes\MegaMenu\MenuItemFactory;
 use PelemanProductUploader\Includes\MegaMenu\Response;
+use WP_Term;
 
 class MegaMenuCreationEndpoint
 {
@@ -35,7 +36,18 @@ class MegaMenuCreationEndpoint
             $menu = $this->create_new_menu($menuName, $request['lang']);
             $menu->add_nav_menu_items($objectTrees);
 
-            $this->convert_menu_to_mega_menu($objectTrees);
+            foreach ($objectTrees as $tree) {
+                $tree->register_settings();
+            }
+
+            if (
+                $this->is_wpml_active()
+                && !empty($menu->get_lang())
+                && $menu->get_lang() !== 'en'
+            ) {
+                $this->Join_menu_translations($menu, $request['parent_menu_name']);
+            }
+
             $this->save_menu_to_location($menu, 'vertical');
 
             return new Response(true, "ding");
@@ -62,7 +74,7 @@ class MegaMenuCreationEndpoint
      * converts a list/array of API input items into parented MenuItem object trees
      *
      * @param array $items
-     * @return RootMenuItem[]
+     * @return MenuItem[]
      */
     private function convert_items_to_object_trees(array $items): array
     {
@@ -75,7 +87,7 @@ class MegaMenuCreationEndpoint
      * second loop: insert children into parents objects
      *
      * @param MenuItem[] $items
-     * @return RootMenuItem[] a list of parent objects, containing children. this is thus an array of trees
+     * @return MenuItem[] a list of parent objects, containing children. this is thus an array of trees
      */
     private function parent_objects_in_array(array $objects): array
     {
@@ -117,32 +129,44 @@ class MegaMenuCreationEndpoint
         return $objects;
     }
 
-    /**
-     * Undocumented function
-     *
-     * @param RootMenuItem[] $objectTrees
-     * @return boolean
-     */
-    private function convert_menu_to_mega_menu(array $objectTrees)
-    {
-        foreach ($objectTrees as $tree) {
-            if (!$tree->is_parent()) {
-                continue;
-            }
-
-            if (!($tree instanceof RootMenuItem)) {
-                error_log(print_r($tree, true));
-            }
-            $tree->register_settings();
-        }
-        return;
-    }
-
     private function save_menu_to_location(MenuContainer $menu, string $location = 'primary'): void
     {
         $locations = get_theme_mod('nav_menu_locations');
         error_log("theme locations: " . print_r($locations, true));
         $locations[$location] = $menu->get_id();
         set_theme_mod('nav_menu_locations', $locations);
+    }
+
+    /**
+     * Attempt to join a menu to its original translation.
+     * 
+     * will do an early return if no original translation can be found, or original menus
+     * conflict with each other
+     *
+     * @param MenuContainer $menu
+     * @param string $parentMenuName
+     * @return void
+     */
+    private function Join_menu_translations(MenuContainer $menu, string $parentMenuName): void
+    {
+        if (empty($parentMenuName)) return;
+        global $wpdb;
+        $parentMenu = get_term_by('name', $parentMenuName, 'nav_menu');
+        if (!($parentMenu instanceof WP_Term)) return;
+
+        $joiner = new TranslatedMenuJoiner($wpdb);
+        $joiner->joinTranslatedMenuWithDefaultMenu($menu->get_id(), $menu->get_lang(), $parentMenu->term_id);
+    }
+
+    /**
+     * helper function - determine if WPML plugin is active.
+     *
+     * @return boolean
+     */
+    private function is_wpml_active(): bool
+    {
+        $active = is_plugin_active('sitepress-multilingual-cms/sitepress.php');
+        error_log($active ? "WPML is active" : "WPML is not active");
+        return $active;
     }
 }
