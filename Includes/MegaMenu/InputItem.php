@@ -49,7 +49,7 @@ class InputItem
         return (int)$this->data->column_number ?? 0;
     }
 
-    public function get_is_heading_text(): bool
+    public function is_heading_text(): bool
     {
         return $this->data->heading_text ?? false;
     }
