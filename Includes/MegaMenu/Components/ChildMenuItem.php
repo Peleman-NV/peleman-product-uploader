@@ -24,7 +24,7 @@ final class ChildMenuItem extends MenuItem
         }
         $itemType = get_post_meta($childId, '_menu_item_object');
         $input = $this->input;
-        $isHeading = $input->get_is_heading_text();
+        $isHeading = $input->is_heading_text();
         $childImageId = 0;
 
         if (isset($itemType[0]) && $itemType[0] === 'product') {

@@ -49,7 +49,7 @@ class InputItem
         return (int)$this->data->column_number ?? 0;
     }
 
-    public function get_is_heading_text(): bool
+    public function is_heading_text(): bool
     {
         return (bool)$this->data->heading_text ?? false;
     }
@@ -78,6 +78,6 @@ class InputItem
 
     public function is_custom_item(): bool
     {
-        return $this->get_custom_url() || $this->get_is_heading_text();
+        return $this->get_custom_url() || $this->is_heading_text();
     }
 }
