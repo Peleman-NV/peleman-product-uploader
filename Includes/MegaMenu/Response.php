@@ -10,7 +10,9 @@ class Response
 {
     private bool $success;
     private string $message;
-    private array $responses;
+    /** @var Response[] */
+    private array $responses = [];
+    private array $data = [];
 
     private int $code;
 
@@ -51,10 +53,17 @@ class Response
         return $this->success;
     }
 
-    public function addErrorArray(array $errors): self
+    public function addResponse(Response $response)
     {
-        $this->errors = array_merge($this->errors, $errors);
-        return $this;
+        if (!$response->isSuccess()) {
+            $this->setError();
+        }
+        $this->responses[] = $response;
+    }
+
+    public function addResponseData(string $key, $data): self
+    {
+        $this->data[$key] = $data;
     }
 
     public function getCode(): int
@@ -68,6 +77,14 @@ class Response
             'status' => $this->success ? "success" : "error",
             'message' => $this->message,
         );
+
+        foreach ($this->data as $key => $value) {
+            $array['data'][$key] = $value;
+        }
+
+        foreach ($this->responses as $response) {
+            $array['responses'][] = $response->to_array();
+        }
 
         return $array;
     }

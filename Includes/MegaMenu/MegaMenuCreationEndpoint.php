@@ -13,26 +13,35 @@ use WP_Term;
 
 class MegaMenuCreationEndpoint
 {
+    private Response $response;
+
     public function __construct()
     {
+        $this->response = new Response();
     }
 
     public function create_new_megamenu(array $request): Response
     {
-        $response = new Response();
+        $this->response = new Response();
         $menuName = $request['name'];
         try {
             $items = $request['items'];
             #region early return
             if (!is_array($items)) {
-                return new Response(false, "incorrect parameter: items is not an array", 400);
+                return $this->response->setError("incorrect parameter: items is not an array", 400);
             }
             if (get_term_by('name', $menuName, 'nav_menu')) {
-                return new Response(false, "menu with name {$menuName} already exists. please try another.", 400);
+                return $this->response->setError("menu with name {$menuName} already exists. please try another.", 400);
             }
             #endregion
 
             $objectTrees = $this->convert_items_to_object_trees($items);
+            if (!$this->response->isSuccess()) {
+                return $this->response
+                    ->setMessage("Failed to create nav item elements.")
+                    ->setCode(400);
+            }
+            
             $menu = $this->create_new_menu($menuName, $request['lang']);
             $menu->add_nav_menu_items($objectTrees);
 
@@ -50,14 +59,14 @@ class MegaMenuCreationEndpoint
 
             $this->save_menu_to_location($menu, 'vertical');
 
-            return new Response(true, "ding");
+            $this->response->setMessage("Menu generated successfully!");
         } catch (\Exception $e) {
-            $response->setError($e->getMessage());
+            $this->response->setError($e->getMessage());
             error_log((string)$e);
-            return $response;
+            return $this->response;
         }
 
-        return $response;
+        return $this->response;
     }
 
     private function create_new_menu(string $name, string $lang): MenuContainer
@@ -78,6 +87,7 @@ class MegaMenuCreationEndpoint
      */
     private function convert_items_to_object_trees(array $items): array
     {
+
         return $this->parent_objects_in_array(
             $this->create_objects_from_inputs($items)
         );
@@ -117,14 +127,20 @@ class MegaMenuCreationEndpoint
         $builder = new MenuItemFactory();
 
         foreach ($items as $item) {
-            $input = new InputItem($item);
-            $key = $input->get_menu_item_name();
-            $object = $builder->create_menu_item($input);
-            if (empty($object)) {
-                error_log("error creating new object: {$key}");
+            try {
+                $input = new InputItem($item);
+                $key = $input->get_menu_item_name();
+                $object = $builder->create_menu_item($input);
+                if (empty($object)) {
+                    error_log("error creating new object: {$key}");
+                    continue;
+                }
+                $objects[$key] = $object;
+                $this->response->addResponse(new Response(true, "created {$object->get_menu_item_name()} nav item"));
+            } catch (\exception $e) {
+                $this->response->addResponse(new Response(false, $e->getMessage(), $e->getCode()));
                 continue;
             }
-            $objects[$key] = $object;
         }
         return $objects;
     }

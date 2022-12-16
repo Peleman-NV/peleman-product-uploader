@@ -162,6 +162,11 @@ abstract class MenuItem
         return $this->input->get_product_sku();
     }
 
+    public function get_menu_item_name(): string
+    {
+        return $this->title;
+    }
+
     #endregion
     private function to_array(): array
     {

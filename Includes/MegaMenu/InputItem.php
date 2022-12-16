@@ -6,6 +6,9 @@ namespace PelemanProductUploader\Includes\MegaMenu;
 
 use stdClass;
 
+/**
+ * Data container object for API menu items input
+ */
 class InputItem
 {
     private object $data;

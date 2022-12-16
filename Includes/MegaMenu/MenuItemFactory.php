@@ -32,7 +32,7 @@ class MenuItemFactory
         error_log("Could not create nav menu item: {$item->menu_item_name}");
         return null;
 
-        // throw new \Exception("error defining menu item type");
+        throw new \Exception("error defining menu item type");
     }
 
     private function createBaseItem(InputItem $input): MenuItem
@@ -47,8 +47,7 @@ class MenuItemFactory
     {
         $term = get_term_by('slug', $item->get_category_slug(), 'product_cat');
         if ($term === false) {
-            // throw new \Exception("Error finding category");
-            return null;
+            throw new \Exception("could not find category {$item->get_category_slug()}");
         }
 
         $navItem = $this->createBaseItem($item);
@@ -63,8 +62,7 @@ class MenuItemFactory
     {
         $productId = wc_get_product_id_by_sku($item->get_product_sku());
         if ($productId === 0) {
-            // throw new \Exception("error finding product");menu
-            return null;
+            throw new \Exception("could not find product {$item->get_menu_item_name()} with sku: {$item->get_product_sku()}");
         }
 
         $navItem = $this->createBaseItem($item);
