@@ -53,17 +53,16 @@ class Response
         return $this->success;
     }
 
-    public function addResponse(Response $response)
+    public function addResponse(Response $response): self
     {
-        if (!$response->isSuccess()) {
-            $this->setError();
-        }
         $this->responses[] = $response;
+        return $this;
     }
 
     public function addResponseData(string $key, $data): self
     {
         $this->data[$key] = $data;
+        return $this;
     }
 
     public function getCode(): int
