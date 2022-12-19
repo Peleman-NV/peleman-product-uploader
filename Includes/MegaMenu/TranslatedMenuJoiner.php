@@ -26,6 +26,7 @@ class TranslatedMenuJoiner
             $defaultLanguageMenu
         );
 
+        error_log("default language menu: " . print_r($defaultLanguageMenu));
         $this->update_menu_item_languages($relationships);
         $trid = $this->get_default_menu_trid($defaultLanguageMenu);
         $this->update_menu_containers($menus, $trid);
@@ -35,7 +36,7 @@ class TranslatedMenuJoiner
     public function joinTranslatedMenuWithDefaultMenu(int $createdMenuId, string $menuLanguage, int $parentMenuId): void
     {
         $trid = $this->get_menu_trid($parentMenuId);
-
+        error_log("trid: {$trid}");
         $updateQuery = $this->db->prepare(
             "UPDATE {$this->db->prefix}icl_tranlsations SET trid = %d, language_code = %s, source_language_code = %s, WHERE element_id = %d AND element_type = 'tax_nav_menu'",
             (int)$trid,
@@ -49,7 +50,7 @@ class TranslatedMenuJoiner
     private function get_menu_trid(int $menuId): int
     {
         $sql = $this->db->prepare(
-            "SELECT trid FROM {$this->db_prefix}icl_translations WHERE element_id = %d AND lement_type = 'tax_nav_menu",
+            "SELECT trid FROM {$this->db_prefix}icl_translations WHERE element_id = %d AND element_type = 'tax_nav_menu",
             $menuId
         );
         return $this->db->get_results($sql)[0]->trid;
