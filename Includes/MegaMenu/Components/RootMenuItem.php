@@ -51,7 +51,7 @@ final class RootMenuItem extends MenuItem
                 $MenuItemGroups[3]
             );
         }
-        error_log("nav column items: " . print_r($navColumnItemArray, true));
+        // error_log("nav column items: " . print_r($navColumnItemArray, true));
         #endregion
 
         $imageSwapWidgetName = $this->updateMegaMenuImageSwapWidgets($MenuItemGroups[1]);
@@ -161,7 +161,7 @@ final class RootMenuItem extends MenuItem
 
         $megaMenuImageSwapWidgets = (array)get_option('widget_maxmegamenu_image_swap', true);
         $megaMenuImageSwapWidgets = $megaMenuImageSwapWidgets ?? [];
-        error_log(print_r($megaMenuImageSwapWidgets, true));
+        // error_log(print_r($megaMenuImageSwapWidgets, true));
         $megaMenuImageSwapWidgets[] = [
             'media_file_id' => $firstChildImageId,
             'media_file_size' => 'full',

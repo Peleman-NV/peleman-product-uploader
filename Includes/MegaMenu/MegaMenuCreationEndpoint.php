@@ -41,7 +41,7 @@ class MegaMenuCreationEndpoint
                     ->setMessage("Failed to create nav item elements.")
                     ->setCode(400);
             }
-            
+
             $menu = $this->create_new_menu($menuName, $request['lang']);
             $menu->add_nav_menu_items($objectTrees);
 
@@ -165,7 +165,7 @@ class MegaMenuCreationEndpoint
      */
     private function Join_menu_translations(MenuContainer $menu, string $parentMenuName): void
     {
-        if (empty($parentMenuName)) return;
+        if (empty($parentMenuName) || $menu->get_lang() === 'en') return;
         global $wpdb;
         $parentMenu = get_term_by('name', $parentMenuName, 'nav_menu');
         if (!($parentMenu instanceof WP_Term)) return;

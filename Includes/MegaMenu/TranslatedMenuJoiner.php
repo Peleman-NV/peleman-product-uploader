@@ -38,22 +38,32 @@ class TranslatedMenuJoiner
         $trid = $this->get_menu_trid($parentMenuId);
         error_log("trid: {$trid}");
         $updateQuery = $this->db->prepare(
-            "UPDATE {$this->db->prefix}icl_tranlsations SET trid = %d, language_code = %s, source_language_code = %s, WHERE element_id = %d AND element_type = 'tax_nav_menu'",
-            (int)$trid,
+            "UPDATE {$this->db->prefix}icl_translations 
+            SET trid = %d, language_code = %s, source_language_code = %s 
+            WHERE (element_id = %d AND element_type = %s)",
+            $trid,
             $menuLanguage,
             $this->defaultLang,
-            $createdMenuId
+            $createdMenuId,
+            'tax_nav_menu'
         );
+        error_log($updateQuery);
         $this->db->get_results($updateQuery);
     }
 
     private function get_menu_trid(int $menuId): int
     {
         $sql = $this->db->prepare(
-            "SELECT trid FROM {$this->db_prefix}icl_translations WHERE element_id = %d AND element_type = 'tax_nav_menu",
-            $menuId
+            "SELECT trid FROM {$this->db->prefix}icl_translations WHERE (element_id = %d AND element_type = %s)",
+            $menuId,
+            'tax_nav_menu',
         );
-        return $this->db->get_results($sql)[0]->trid;
+        $results = $this->db->get_results($sql);
+
+        if (empty($results)) {
+            throw new \Exception("Cannot join menu translation to original; original not found in database.", 400);
+        }
+        return (int)$results[0]->trid;
     }
 
     private function get_menu_term_relationships(array $menus, array &$defaultMenu): array
@@ -76,21 +86,36 @@ class TranslatedMenuJoiner
     {
         foreach ($relations as $language => $relationships) {
             $relations = implode(',', $relationships);
-            $this->db->get_results("UPDATE {$this->db->prefix}'icl_translations' SET language_code = '$language', source_language_code = 'en' WHERE element_id in ($relations);");
+            $sql = $this->db->prepare(
+                "UPDATE {$this->db->prefix}icl_translations SET language_code = %s, source_language_code = 'en' WHERE element_id IN (%s);",
+                $language,
+                $relations,
+            );
+            $this->db->get_results($sql);
         }
     }
 
-    private function get_default_menu_trid(array $defaultMenu): string
+    private function get_default_menu_trid(array $defaultMenu): int
     {
-        $tridSql = "SELECT trid FROM {$this->db->prefix}'icl_translations' WHERE language_code = 'en' AND element_id = {$defaultMenu['id']};";
-        return $this->db->get_results($tridSql)[0]->trid;
+        $tridSql = $this->db->prepare(
+            "SELECT trid FROM {$this->db->prefix}icl_translations WHERE (language_code = 'en' AND element_id = %d);",
+            (int)$defaultMenu['id']
+        );
+        $trid = (int)$this->db->get_results($tridSql)[0]->trid;
+        error_log("default menu trid: {$trid}");
+        return $trid;
     }
 
-    private function update_menu_containers(array $menus, string $defaultTrid): void
+    private function update_menu_containers(array $menus, int $defaultTrid): void
     {
         foreach ($menus as $menu) {
             if ($menu['lang'] === 'en') continue;
-            $updateMenuContainersSql = "UPDATE {$this->db->prefix}'icl_translations' SET language_code = '{$menu['lang']}', trid = $defaultTrid, source_language_code = 'en' WHERE element_id = {$menu['id']};";
+            $updateMenuContainersSql = $this->db->prepare(
+                "UPDATE {$this->db->prefix}icl_translations SET language_code = %s, trid = %d, source_language_code = 'en' WHERE element_id = %d;",
+                $menu['lang'],
+                $defaultTrid,
+                (int)$menu['id'],
+            );
             $this->db->get_results($updateMenuContainersSql);
         }
     }
