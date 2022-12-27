@@ -82,6 +82,12 @@ class TranslatedMenuJoiner
         return $relationships;
     }
 
+    /**
+     * update language codes of the menu items
+     *
+     * @param array $relations
+     * @return void
+     */
     private function update_menu_item_languages(array $relations): void
     {
         foreach ($relations as $language => $relationships) {
@@ -94,7 +100,12 @@ class TranslatedMenuJoiner
             $this->db->get_results($sql);
         }
     }
-
+/**
+ * retrieve WMPL trid of the default menu
+ *
+ * @param array $defaultMenu
+ * @return integer
+ */
     private function get_default_menu_trid(array $defaultMenu): int
     {
         $tridSql = $this->db->prepare(
@@ -106,6 +117,13 @@ class TranslatedMenuJoiner
         return $trid;
     }
 
+    /**
+     * merge created menus with the default language menu
+     *
+     * @param array $menus
+     * @param integer $defaultTrid
+     * @return void
+     */
     private function update_menu_containers(array $menus, int $defaultTrid): void
     {
         foreach ($menus as $menu) {

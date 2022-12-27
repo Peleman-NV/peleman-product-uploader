@@ -193,6 +193,12 @@ abstract class MenuItem
         return !empty($this->children);
     }
 
+    /**
+     * wrapper method to set this menuitem as the child of a WP menu, 
+     *
+     * @param MenuContainer $menu
+     * @return void
+     */
     public function add_to_menu(MenuContainer $menu): void
     {
         $db_id = wp_update_nav_menu_item(
