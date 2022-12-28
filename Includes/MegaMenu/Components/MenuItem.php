@@ -213,6 +213,8 @@ abstract class MenuItem
         }
         $this->db_id = $db_id;
 
+        error_log($this->get_menu_item_name() . ": " . $db_id);
+
         foreach ($this->children as $child) {
             $child->set_parent_id($db_id);
             $child->add_to_menu($menu);

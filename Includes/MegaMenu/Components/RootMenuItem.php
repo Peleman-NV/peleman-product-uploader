@@ -25,51 +25,37 @@ final class RootMenuItem extends MenuItem
         }
         #region columns
         $columnWidths = $this->input->get_column_widths();
-
-        // divvy up into columns
-        $MenuItemGroups = [
-            1 => $this->sort_items_into_columns($this->children, 1),
-            2 => $this->sort_items_into_columns($this->children, 2),
-            3 => $this->sort_items_into_columns($this->children, 3),
-        ];
-        // error_log("menu item group result: " . print_r($MenuItemGroups, true));
+        $columnWidths = array_values($columnWidths);
 
         $navColumnItemArray = [];
-        $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray(
-            (int)$columnWidths['one'],
-            $MenuItemGroups[1]
-        );
-        if (!empty($MenuItemGroups[2])) {
-            $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray(
-                (int)$columnWidths['two'],
-                $MenuItemGroups[2]
+        $imageSwapWidgetName = '';
+        for ($i = 0; $i < count($columnWidths); $i++) {
+            $group = $this->sort_items_into_columns($this->children, $i);
+            if (empty($group)) continue;
+            $navColumnItemArray[$i] = $this->createMegaMenuParentObjectColumnArray(
+                (int)$columnWidths[$i],
+                $group,
             );
-        }
-        if (!empty($MenuItemGroups[3])) {
-            $navColumnItemArray[] = $this->createMegaMenuParentObjectColumnArray(
-                (int)$columnWidths['three'],
-                $MenuItemGroups[3]
-            );
-        }
-        // error_log("nav column items: " . print_r($navColumnItemArray, true));
-        #endregion
 
-        $imageSwapWidgetName = $this->updateMegaMenuImageSwapWidgets($MenuItemGroups[1]);
+            if ($i === 0) {
+                $imageSwapWidgetName = $this->updateMegaMenuImageSwapWidgets($group);
+            }
 
-        $navColumnItemArray[] = [
-            "meta" => [
-                "span" => strval($columnWidths['four']),
-                "class" => "",
-                "hide-on-desktop" => "false",
-                "hide-on-mobile" => "false",
-            ],
-            "items" => [
-                [
-                    "id" => $imageSwapWidgetName,
-                    "type" => "widget"
+            $navColumnItemArray[$i] = [
+                "meta" => [
+                    "span" => $columnWidths[$i],
+                    "class" => "",
+                    "hide-on-desktop" => "false",
+                    "hide-on-mobile" => "false",
+                ],
+                "items" => [
+                    [
+                        "id" => $imageSwapWidgetName,
+                        "type" => "widget"
+                    ]
                 ]
-            ]
-        ];
+            ];
+        }
 
         $settingsArray = [
             "type" => "grid",

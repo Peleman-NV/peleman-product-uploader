@@ -101,18 +101,13 @@ class MegaMenuCreationEndpoint
      */
     private function parent_objects_in_array(array $objects): array
     {
-        $parents = [];
-        foreach ($objects as $key => $object) {
+        foreach ($objects['children'] as $object) {
             $parent = $object->get_parent_title();
-            if ($object instanceof RootMenuItem && empty($parent)) {
-                $parents[$key] = $object;
-                continue;
-            }
-            $objects[$parent]->add_child_element($object);
+            $objects['parents'][$parent]->add_child_element($object);
         }
 
         //array now contains parented objects.
-        return $parents;
+        return $objects['parents'];
     }
 
     /**
@@ -135,8 +130,12 @@ class MegaMenuCreationEndpoint
                     error_log("error creating new object: {$key}");
                     continue;
                 }
-                $objects[$key] = $object;
-                $this->response->addResponse(new Response(true, "created {$object->get_menu_item_name()} nav item"));
+                
+                if (empty($object->get_parent_title())) {
+                    $objects['parents'][$key] = $object;
+                } else ($objects['children'][$key] = $object);
+
+                $this->response->addResponse(new Response(true, "created {$object->get_menu_item_name()} nav item with db_id {$object->get_db_id()}"));
             } catch (\exception $e) {
                 $this->response->addResponse(new Response(false, $e->getMessage(), $e->getCode()));
                 continue;
