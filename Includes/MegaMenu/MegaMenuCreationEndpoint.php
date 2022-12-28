@@ -35,7 +35,7 @@ class MegaMenuCreationEndpoint
             }
             #endregion
 
-            $objectTrees = $this->convert_items_to_object_trees($items);
+            $objectTrees = $this->create_objects_from_inputs($items);
             if (!$this->response->isSuccess()) {
                 return $this->response
                     ->setMessage("Failed to create nav item elements.")
@@ -80,37 +80,6 @@ class MegaMenuCreationEndpoint
     }
 
     /**
-     * converts a list/array of API input items into parented MenuItem object trees
-     *
-     * @param array $items
-     * @return MenuItem[]
-     */
-    private function convert_items_to_object_trees(array $items): array
-    {
-
-        return $this->parent_objects_in_array(
-            $this->create_objects_from_inputs($items)
-        );
-    }
-
-    /**
-     * second loop: insert children into parents objects
-     *
-     * @param MenuItem[] $items
-     * @return MenuItem[] a list of parent objects, containing children. this is thus an array of trees
-     */
-    private function parent_objects_in_array(array $objects): array
-    {
-        foreach ($objects['children'] as $object) {
-            $parent = $object->get_parent_title();
-            $objects['parents'][$parent]->add_child_element($object);
-        }
-
-        //array now contains parented objects.
-        return $objects['parents'];
-    }
-
-    /**
      * convert each item to an object, and put in an associative array with name as key
      *
      * @param array $items
@@ -130,10 +99,10 @@ class MegaMenuCreationEndpoint
                     error_log("error creating new object: {$key}");
                     continue;
                 }
-                
-                if (empty($object->get_parent_title())) {
-                    $objects['parents'][$key] = $object;
-                } else ($objects['children'][$key] = $object);
+
+                if ($object->get_parent_title()) {
+                    $objects[$object->get_parent_title()]->add_child_element($object);
+                } else ($objects[$key] = $object);
 
                 $this->response->addResponse(new Response(true, "created {$object->get_menu_item_name()} nav item with db_id {$object->get_db_id()}"));
             } catch (\exception $e) {

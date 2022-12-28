@@ -29,8 +29,8 @@ final class RootMenuItem extends MenuItem
 
         $navColumnItemArray = [];
         $imageSwapWidgetName = '';
-        for ($i = 0; $i < count($columnWidths); $i++) {
-            $group = $this->sort_items_into_columns($this->children, $i);
+        for ($i = 0; $i <= count($columnWidths); $i++) {
+            $group = $this->sort_items_into_columns($this->children, $i + 1);
             if (empty($group)) continue;
             $navColumnItemArray[$i] = $this->createMegaMenuParentObjectColumnArray(
                 (int)$columnWidths[$i],
@@ -40,22 +40,22 @@ final class RootMenuItem extends MenuItem
             if ($i === 0) {
                 $imageSwapWidgetName = $this->updateMegaMenuImageSwapWidgets($group);
             }
-
-            $navColumnItemArray[$i] = [
-                "meta" => [
-                    "span" => $columnWidths[$i],
-                    "class" => "",
-                    "hide-on-desktop" => "false",
-                    "hide-on-mobile" => "false",
-                ],
-                "items" => [
-                    [
-                        "id" => $imageSwapWidgetName,
-                        "type" => "widget"
-                    ]
-                ]
-            ];
         }
+
+        $navColumnItemArray[] = [
+            "meta" => [
+                "span" => $columnWidths[3],
+                "class" => "",
+                "hide-on-desktop" => "false",
+                "hide-on-mobile" => "false",
+            ],
+            "items" => [
+                [
+                    "id" => $imageSwapWidgetName,
+                    "type" => "widget"
+                ]
+            ]
+        ];
 
         $settingsArray = [
             "type" => "grid",
@@ -88,14 +88,13 @@ final class RootMenuItem extends MenuItem
     }
 
     /**
-     * Undocumented function
+     * sort items into an array of columns, based on their internal column number value
      *
      * @param MenuItem[] $array
      * @param integer $columnNumber
-     * @param integer $maxColumns
      * @return MenuItem[]
      */
-    private function sort_items_into_columns(array $array, int $columnNumber, int $maxColumns = 3): array
+    private function sort_items_into_columns(array $array, int $columnNumber): array
     {
         $columns = [];
         foreach ($array as $element) {
