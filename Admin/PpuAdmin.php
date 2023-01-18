@@ -131,9 +131,11 @@ class PpuAdmin
 	public function registerGetAttributesEndpoint()
 	{
 		register_rest_route('ppu/v1', '/attributes', array(
-			'methods' => 'GET',
-			'callback' => array($this, 'getAttributes'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'GET',
+				'callback' => array($this, 'getAttributes'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -159,10 +161,15 @@ class PpuAdmin
 	public function registerGetTagsEndpoint()
 	{
 		register_rest_route('ppu/v1', '/tags(?:/(?P<page>\d+))?', array(
-			'methods' => 'GET',
-			'callback' => array($this, 'getTags'),
-			'args' => array('page'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'GET',
+				'callback' => array($this, 'getTags'),
+				'args' => array('page' => [
+					'type' => 'string',
+					'required' => 'true'
+				]),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -193,10 +200,15 @@ class PpuAdmin
 	public function registerGetImagesEndpoint()
 	{
 		register_rest_route('ppu/v1', '/image(?:/(?P<image_name>\S+))?', array(
-			'methods' => 'GET',
-			'callback' => array($this, 'getImages'),
-			'args' => array('page'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'GET',
+				'callback' => array($this, 'getImages'),
+				'args' => array('page' => [
+					'type' => 'string',
+					'required' => 'true'
+				]),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -261,10 +273,15 @@ class PpuAdmin
 	public function registerGetCategoriesEndpoint()
 	{
 		register_rest_route('ppu/v1', '/categories(?:/(?P<page>\d+))?', array(
-			'methods' => 'GET',
-			'callback' => array($this, 'getCategories'),
-			'args' => array('page'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'GET',
+				'callback' => array($this, 'getCategories'),
+				'args' => array('page' => [
+					'type' => 'string',
+					'required' => 'true'
+				]),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -296,10 +313,15 @@ class PpuAdmin
 	public function registerGetProductsEndpoint()
 	{
 		register_rest_route('ppu/v1', '/products(?:/(?P<page>\d+))?', array(
-			'methods' => 'GET',
-			'callback' => array($this, 'getProducts'),
-			'args' => array('page'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'GET',
+				'callback' => array($this, 'getProducts'),
+				'args' => array('page' => [
+					'type' => 'string',
+					'required' => 'true'
+				]),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -331,10 +353,15 @@ class PpuAdmin
 	public function registerGetTermsEndpoint()
 	{
 		register_rest_route('ppu/v1', '/terms(?:/(?P<page>\d+))?', array(
-			'methods' => 'GET',
-			'callback' => array($this, 'getTerms'),
-			'args' => array('page'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'GET',
+				'callback' => array($this, 'getTerms'),
+				'args' => array('page' => [
+					'type' => 'string',
+					'required' => 'true'
+				]),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -379,10 +406,18 @@ class PpuAdmin
 	public function registerGetVariationsEndpoint()
 	{
 		register_rest_route('ppu/v1', '/product/(?P<sku>\w+)/variations(?:/(?P<page>\d+))?', array(
-			'methods' => 'GET',
-			'callback' => array($this, 'getProductVariations'),
-			'args' => array('sku', 'page'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'GET',
+				'callback' => array($this, 'getProductVariations'),
+				'args' => array('sku' => [
+					'type' => 'string',
+					'required' => 'true'
+				], 'page' => [
+					'type' => 'int',
+					'required' => 'true'
+				]),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -415,9 +450,11 @@ class PpuAdmin
 	public function registerPostAttributesEndpoint()
 	{
 		register_rest_route('ppu/v1', '/attributes', array(
-			'methods' => 'POST',
-			'callback' => array($this, 'postAttributes'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'POST',
+				'callback' => array($this, 'postAttributes'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -442,9 +479,11 @@ class PpuAdmin
 	public function registerPostTagsEndpoint()
 	{
 		register_rest_route('ppu/v1', '/tags', array(
-			'methods' => 'POST',
-			'callback' => array($this, 'postTags'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'POST',
+				'callback' => array($this, 'postTags'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -469,9 +508,11 @@ class PpuAdmin
 	public function registerPostCategoriesEndpoint()
 	{
 		register_rest_route('ppu/v1', '/categories', array(
-			'methods' => 'POST',
-			'callback' => array($this, 'postCategories'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'POST',
+				'callback' => array($this, 'postCategories'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -496,9 +537,11 @@ class PpuAdmin
 	public function registerPostProductsEndpoint()
 	{
 		register_rest_route('ppu/v1', '/products', array(
-			'methods' => 'POST',
-			'callback' => array($this, 'postProducts'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'POST',
+				'callback' => array($this, 'postProducts'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -523,9 +566,11 @@ class PpuAdmin
 	public function registerPostVariationsEndpoint()
 	{
 		register_rest_route('ppu/v1', '/variations', array(
-			'methods' => 'POST',
-			'callback' => array($this, 'postVariations'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'POST',
+				'callback' => array($this, 'postVariations'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -550,9 +595,11 @@ class PpuAdmin
 	public function registerPostTermsEndpoint()
 	{
 		register_rest_route('ppu/v1', '/terms', array(
-			'methods' => 'POST',
-			'callback' => array($this, 'postTerms'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'POST',
+				'callback' => array($this, 'postTerms'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -577,9 +624,11 @@ class PpuAdmin
 	public function registerPostImageEndpoint()
 	{
 		register_rest_route('ppu/v1', '/image', array(
-			'methods' => 'POST',
-			'callback' => array($this, 'postImage'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'POST',
+				'callback' => array($this, 'postImage'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -682,9 +731,11 @@ class PpuAdmin
 	public function registerPostMenuEndpoint()
 	{
 		register_rest_route('ppu/v1', '/menu', array(
-			'methods' => 'POST',
-			'callback' => array($this, 'postMenu'),
-			'permission_callback' => '__return_true'
+			array(
+				'methods' => 'POST',
+				'callback' => array($this, 'postMenu'),
+				'permission_callback' => '__return_true'
+			)
 		));
 	}
 
@@ -830,9 +881,9 @@ class PpuAdmin
 					}
 					$iterator++;
 				}
-				$response = $this->addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId);
+				$videoResult = $this->addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId);
 
-				if ($response === false) {
+				if (!$videoResult) {
 					$response['status'] = 'error';
 					$response['message'] = 'Could not add video to product';
 				}
@@ -853,6 +904,7 @@ class PpuAdmin
 						$response['action'] = 'modify product';
 					}
 				} catch (\Throwable $th) {
+					error_log((string)$th);
 					$response['status'] = 'error';
 					$response['message'] = $th->getMessage();
 					$response['error_detail'] = $item ?? null;
