@@ -42,7 +42,7 @@ class PpuAdmin
 	 */
 	public function enqueue_styles()
 	{
-		$randomVersionNumber = rand(1, 1000);
+		$randomVersionNumber = wp_rand(1, 1000);
 		wp_enqueue_style($this->plugin_name, plugin_dir_url(__FILE__) . 'css/style.css', array(), $randomVersionNumber, 'all');
 	}
 
@@ -51,7 +51,7 @@ class PpuAdmin
 	 */
 	public function enqueue_scripts()
 	{
-		$randomVersionNumber = rand(1, 1000);
+		$randomVersionNumber = wp_rand(1, 1000);
 		wp_enqueue_script($this->plugin_name, plugin_dir_url(__FILE__) . 'js/admin-ui.js', array('jquery'), $randomVersionNumber, true);
 	}
 
@@ -1073,7 +1073,7 @@ class PpuAdmin
 		$characters = '0123456789abcdefghijklmnopqrstuvwxyz';
 		$randomString = '';
 		for ($i = 0; $i < $length; $i++) {
-			$index = rand(0, strlen($characters) - 1);
+			$index = wp_rand(0, strlen($characters) - 1);
 			$randomString .= $characters[$index];
 		}
 
@@ -1495,6 +1495,7 @@ class PpuAdmin
 	private function handleAttributeTerms($dataArray)
 	{
 		$finalResponse = array();
+		$attrId = '';
 
 		// get all current attributes
 		$currentAttributes = wc_get_attribute_taxonomies();
