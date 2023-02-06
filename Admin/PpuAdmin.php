@@ -864,31 +864,6 @@ class PpuAdmin
 				$item->cross_sell_ids = $this->get_product_ids_for_sku_array($item->cross_sell_skus);
 			}
 
-			// handle videos
-			if ($item->videos !== null && !empty($item->videos)) {
-				$iterator = 0;
-				$nrOfVideos = count($item->videos);
-				$videoJsonStringArray = [];
-				foreach ($item->videos as $video) {
-					$youTubeId = $this->createGetParamArray($video->youtube_url)['v'];
-					$response = $this->downloadYouTubeThumbnailAsWpAttachment($youTubeId, $video->title);
-					if ($response['result'] === 'success') {
-						$attachmentId = $response['data'];
-						$videoJsonStringArray[] = $this->createJsonStringForVideo($iterator, $attachmentId, $video->title, $video->youtube_url);
-					} else {
-						$response['status'] = 'error';
-						$response['message'] = $response['message'];
-					}
-					$iterator++;
-				}
-				$videoResult = $this->addVideosToProduct($nrOfVideos, $videoJsonStringArray, $productId);
-
-				if (!$videoResult) {
-					$response['status'] = 'error';
-					$response['message'] = 'Could not add video to product';
-				}
-			}
-
 			if (!isset($response['status'])) {
 				try {
 					$api = $this->apiClient();
