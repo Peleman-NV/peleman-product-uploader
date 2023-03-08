@@ -795,7 +795,10 @@ class PpuAdmin
 			if (isset($item->categories) && $item->categories != null) {
 				foreach ($item->categories as $category) {
 					if (!is_int($category->slug)) {
+												//check return value validity first to avoid error log clutter
+
 						$category->id = get_term_by('slug', $category->slug, 'product_cat')->term_id;
+						error_log("category id: " . $category->id);
 						if ($category->id === null) {
 							$response['status'] = 'error';
 							$response['message'] = "Category $category->slug not found";
@@ -807,7 +810,9 @@ class PpuAdmin
 			if (isset($item->tags) && $item->tags != null) {
 				foreach ($item->tags as $tag) {
 					if (!is_int($tag->slug)) {
+						//check return value validity first to avoid error log clutter
 						$tag->id = get_term_by('slug', $tag->slug, 'product_tag')->term_id;
+						error_log("tag id: " . $tag->id);
 						if ($tag->id === null) {
 							$response['status'] = 'error';
 							$response['message'] = "Tag $category->tag not found";
